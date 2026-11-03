@@ -1,0 +1,41 @@
+name: update-draws
+# 동행복권 공식 당첨번호 자동 수집
+# - 일요일 03:17 KST(토 18:17 UTC) + 월요일 07:23 KST 보완 실행 + 수동 실행
+# - 테스트·검증 통과 시에만 draws/lotto645.json 커밋 → GitHub Pages 자동 배포
+on:
+  schedule:
+    - cron: '17 18 * * 6'
+    - cron: '23 22 * * 0'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'auto | history | update'
+        default: 'auto'
+  push:
+    paths: ['tools/fetch_draws.mjs', '.github/workflows/draws.yml']
+permissions:
+  contents: write
+concurrency:
+  group: update-draws
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 당첨번호 수집
+        run: node tools/fetch_draws.mjs "${{ github.event.inputs.mode || 'auto' }}"
+      - name: 테스트
+        run: node --test
+      - name: 바뀐 경우에만 커밋
+        run: |
+          if git diff --quiet -- draws/lotto645.json; then echo "변경 없음"; exit 0; fi
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add draws/lotto645.json
+          git commit -m "당첨번호 자동 갱신 $(date -u +%F)"
+          git push

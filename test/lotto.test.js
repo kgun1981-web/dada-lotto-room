@@ -59,17 +59,29 @@ test('원본 배열 변경 없음', () => {
   assert.deepEqual(d.numbers, [6, 5, 4, 3, 2, 1]);
 });
 
-// ---- 실제 회차 대조 (언론 보도 기준 픽스처) ----
+// ---- 실제 회차 데이터 (공식 수집 또는 수동 입력 픽스처) ----
 const data = JSON.parse(readFileSync(new URL('../draws/lotto645.json', import.meta.url)));
-for (const d of data.draws) {
-  test(`실제 ${d.round}회 데이터 검증·대조`, () => {
+test('실제 데이터 전체: 형식 검증, 1등·2등 판정, 출처 기록', () => {
+  for (const d of data.draws) {
     validateDraw(d);
-    assert.ok(d.source.startsWith('https://'));
+    assert.ok(d.source.startsWith('https://'), `${d.round}회 출처`);
     assert.equal(judge(d.numbers, d).rank, 1);
-    const five = [...d.numbers.slice(0, 5), d.bonus];
-    assert.equal(judge(five, d).rank, 2);
-  });
-}
+    assert.equal(judge([...d.numbers.slice(0, 5), d.bonus], d).rank, 2);
+  }
+});
+// 2026-11-03 언론 보도 + 김동건 휴대폰 앱 화면으로 확인한 값 (공식 수집 데이터와 대조)
+const KNOWN = {
+  1206: { date: '2026-01-10', numbers: [1, 3, 17, 26, 27, 42], bonus: 23 },
+  1208: { date: '2026-01-24', numbers: [6, 27, 30, 36, 38, 42], bonus: 25 },
+  1209: { date: '2026-01-31', numbers: [2, 17, 20, 35, 37, 39], bonus: 24 },
+};
+test('알려진 회차 값과 일치 (언론·제3자 앱 대조)', () => {
+  for (const [r, k] of Object.entries(KNOWN)) {
+    const d = data.draws.find((x) => x.round === Number(r));
+    if (!d) continue;
+    assert.deepEqual({ date: d.date, numbers: d.numbers, bonus: d.bonus }, k, `${r}회`);
+  }
+});
 test('실제 데이터: 회차 중복 없음·증가', () => {
   const rounds = data.draws.map((d) => d.round);
   assert.equal(new Set(rounds).size, rounds.length);
