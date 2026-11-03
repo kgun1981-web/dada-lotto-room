@@ -39,12 +39,13 @@ writeFileSync('index.html', deploy.replace('__APP_VERSION__', APP_VERSION));
 
 // 미리보기: lib·draws 내장
 const strip = (f) => readFileSync(f, 'utf8').replace(/^import .*$/gm, '').replace(/^export /gm, '');
-const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/userdraws.js', 'lib/backup.js', 'lib/drafts.js', 'lib/draws.js', 'lib/store.js'];
+const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/userdraws.js', 'lib/backup.js', 'lib/drafts.js', 'lib/draws.js', 'lib/stats.js', 'lib/store.js'];
 const lib = LIBS.map(strip).join('\n');
 const draws = readFileSync('draws/lotto645.json', 'utf8');
 const preview = app.replace('__APP_VERSION__', '미리보기')
   .replace(/\/\*__LIB__\*\/[\s\S]*?\/\*__END_LIB__\*\//, () => lib)
-  .replace(/\/\*__DRAWS__\*\/null\/\*__END_DRAWS__\*\//, () => draws);
+  .replace(/\/\*__DRAWS__\*\/null\/\*__END_DRAWS__\*\//, () => draws)
+  .replace(/\/\*__BACKTEST__\*\/null\/\*__END_BACKTEST__\*\//, () => readFileSync('draws/backtest.json', 'utf8'));
 writeFileSync('preview.html', preview);
 // 서비스 워커: 앱 파일 내용 해시로 캐시 버전 자동 갱신
 const APP_FILES = ['./', './index.html', ...LIBS.map((f) => './' + f), './manifest.webmanifest',

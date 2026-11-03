@@ -56,6 +56,27 @@
   .bonus-row { display: flex; align-items: center; gap: 8px; }
   .bonus-row input { width: 64px; text-align: center; font-weight: 700; }
   .draw-warn { font-size: 12.5px; color: var(--warn); font-weight: 600; margin: 0; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--soft); padding: 4px; border-radius: 10px; }
+  .seg button { appearance: none; border: 0; background: transparent; color: var(--muted); font: 600 14px var(--font); padding: 8px; border-radius: 7px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--paper); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .bt { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .bt th, .bt td { padding: 6px 4px; border-top: 1px solid var(--line); text-align: right; }
+  .bt th:first-child, .bt td:first-child { text-align: left; }
+  .bt thead th { border-top: 0; color: var(--muted); font-weight: 600; font-size: 12px; }
+  .bt td small { color: var(--muted); }
+  .verdict { background: var(--soft); border-radius: 9px; padding: 10px 12px; font-size: 13.5px; margin: 0; }
+  details.box > summary { cursor: pointer; font-weight: 700; font-size: 15px; list-style: none; }
+  details.box > summary::after { content: ' ▾'; color: var(--muted); }
+  details.box[open] > summary::after { content: ' ▴'; }
+  .heat { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px 4px; }
+  .heat div { display: grid; justify-items: center; gap: 2px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .heat .ball { width: 28px; height: 28px; font-size: 12px; }
+  .heat .ball.lv0 { opacity: .35; } .heat .ball.lv1 { opacity: .6; } .heat .ball.lv2 { opacity: .85; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 12.5px; color: var(--muted); }
+  .chips span { display: inline-flex; align-items: center; gap: 6px; }
+  .chips .ball { flex: none; }
+  .chips .ball { width: 26px; height: 26px; font-size: 11.5px; }
+  h3 { font-size: 14px; margin: 4px 0 0; }
   .grow .rm { flex: none; width: 34px; height: 38px; padding: 0; font-size: 16px; line-height: 1; }
   .toggle input { width: 46px; height: 26px; accent-color: var(--accent); }
   .btn { appearance: none; border: 1px solid var(--line); background: var(--paper); color: var(--fg); font: 600 14px var(--font);
@@ -95,6 +116,7 @@
     <h1>다다의 복권방</h1>
     <p class="status" id="status">당첨 데이터 불러오는 중…</p>
     <p class="status err" id="drawWarn" hidden></p>
+    <p class="status err" id="staleNote" hidden></p>
     <div class="notice" id="updateNote" hidden><span>새 버전이 준비됐어요. 입력 중인 내용을 저장한 뒤 적용하세요.</span><div class="btns"><button class="btn small" type="button" id="applyUpdate">새 버전 적용</button></div>
       <div class="confirm" id="applyConfirm" hidden><p class="err">저장하지 않은 입력은 사라집니다. 지금 적용할까요?</p><div class="btns"><button class="btn small danger" type="button" id="applyYes">적용</button><button class="btn small" type="button" id="applyNo">취소</button></div></div></div>
   </header>
@@ -108,7 +130,16 @@
 
   <!-- 번호 생성 -->
   <section class="panel" id="p-gen">
-    <div class="box">
+    <div class="seg" role="group" aria-label="추천 방식">
+      <button type="button" id="mode-stat" aria-pressed="true">통계 추천</button>
+      <button type="button" id="mode-rand" aria-pressed="false">무작위</button>
+    </div>
+    <div class="box" id="statBox">
+      <h2 id="statTitle">통계 추천</h2>
+      <p class="note">과거 당첨번호를 분석해 만든 통계 기반 추천입니다. 모든 번호 조합의 당첨 확률은 같으며, 이 추천이 당첨 가능성을 높인다는 근거는 없습니다. 과거 회차에서 시험한 결과와 무작위 추천 비교를 함께 보여드립니다.</p>
+      <p class="note" id="statRule"></p>
+    </div>
+    <div class="box" id="randBox" hidden>
       <div class="row toggle">
         <label for="filter"><b>패턴 회피 (실험)</b></label>
         <input type="checkbox" id="filter" checked>
@@ -121,6 +152,14 @@
       <ol class="games" id="games" aria-live="polite"></ol>
       <div class="row"><span class="note" id="stat"></span><button class="btn small" id="toMy" type="button">입력 초안 만들기 (2장)</button></div>
     </div>
+    <div class="box" id="btBox">
+      <h2>과거 검증</h2>
+      <div id="btBody"><p class="note">과거 검증 결과를 불러오는 중…</p></div>
+    </div>
+    <details class="box" id="numBox">
+      <summary>번호별 통계</summary>
+      <div id="numBody" class="panel"></div>
+    </details>
   </section>
 
   <!-- 내 복권 -->
@@ -148,6 +187,7 @@
     <div class="notice warn" id="conflicts" hidden></div>
     <form class="box" id="drawForm" novalidate>
       <h2 id="drawTitle">당첨번호 직접 등록</h2>
+      <p class="note">당첨번호는 매주 일요일 새벽 동행복권 결과 화면에서 자동으로 받아와요(동행복권이 이 앱을 인증하거나 허가한 것은 아니에요). 자동 수집이 늦어질 때만 여기서 직접 입력하세요.</p>
       <p class="note">동행복권 공식 결과(앱·홈페이지·방송)를 보고 그대로 입력하세요. 직접 입력한 번호로 판정한 결과에는 "공식 결과와 대조 필요"가 함께 표시됩니다.</p>
       <label class="f" for="dRound">회차<input type="number" id="dRound" inputmode="numeric" min="1" step="1" placeholder="공식 결과에 적힌 회차"></label>
       <label class="f" for="dDate">추첨일<input type="date" id="dDate"></label>
@@ -198,7 +238,7 @@
     </div>
   </section>
 
-  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.03-1928</span></footer>
+  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0429</span></footer>
 </div>
 
 <script type="module">
@@ -209,9 +249,11 @@ import { validateUserDraw, mergeDraws, isUserDraw } from './lib/userdraws.js';
 import { makeBackup, readBackup } from './lib/backup.js';
 import { emptyDrafts, createDrafts, draftSaved, nextDraft, discardDrafts, canLoadNext } from './lib/drafts.js';
 import { chooseDrawData } from './lib/draws.js';
+import { recommend, numberStats, topPairs, STRATEGY } from './lib/stats.js';
 import { store, drawStore } from './lib/store.js';
 /*__END_LIB__*/
 const DRAWS_INLINE = /*__DRAWS__*/null/*__END_DRAWS__*/;
+const BACKTEST_INLINE = /*__BACKTEST__*/null/*__END_BACKTEST__*/;
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -269,11 +311,17 @@ function rebuildIndex() {
   const pubN = publicIdx.size;
   const userN = [...drawIdx.values()].filter(isUserDraw).length;
   const official = pubN && [...publicIdx.values()].every((d) => d.status === 'official_verified');
+  const pubLatest = pubN ? publicIdx.get(Math.max(...publicIdx.keys())) : null;
+  const staleDays = pubLatest ? Math.floor((Date.now() - Date.parse(pubLatest.date + 'T21:00:00+09:00')) / 86400000) : null;
+  const stale = staleDays != null && staleDays >= 9; // 토요일 추첨 후 다음 주 월요일까지 갱신이 없으면
   const pubPart = publicMeta.ok
-    ? `공개 데이터 <b>${pubN}회차</b>(확인일 ${esc(publicMeta.lastChecked)}${official ? '' : ' · 공식 대조 전'}${publicMeta.fromCache ? ' · 저장된 사본' : ''})`
-    : '공개 당첨번호 확인 불가';
+    ? `동행복권 결과 화면 기준 <b>${pubN}회차</b>(확인일 ${esc(publicMeta.lastChecked)}${official ? '' : ' · 공식 대조 전'}${publicMeta.fromCache ? ' · 최신 확인 실패, 이전에 받은 자료 사용' : ''})`
+    : '자동 수집 당첨번호를 불러오지 못함';
+  $('staleNote').hidden = !stale;
+  if (stale) $('staleNote').textContent = `자동 수집이 늦어지고 있어요. 마지막 자동 수집 회차는 ${pubLatest.round}회(${pubLatest.date})예요. 그 뒤 회차는 당첨번호 탭에서 직접 입력할 수 있어요.`;
   $('status').innerHTML = `판정 가능 <b>${drawIdx.size}회차</b> · 마지막 <b>${latest || '-'}회</b> · ${pubPart}` +
     (userN ? ` · 직접 입력 <b>${userN}회차</b>` : '');
+  renderStats();
 }
 
 // ---------- 탭 ----------
@@ -287,14 +335,25 @@ function show(name) {
 for (const k in tabs) $('tab-' + k).addEventListener('click', () => show(k));
 
 // ---------- 번호 생성 ----------
+const LS_MODE = 'dada-lotto-gen-mode';
+let genMode = lsGet(LS_MODE) === 'rand' ? 'rand' : 'stat';
+let backtestData = null;
 $('rules').textContent = '제외 규칙: ' + Object.values(FILTERS).map((f) => f.label).join(', ');
+const officialDraws = () => [...publicIdx.values()].filter((d) => d.status === 'official_verified').sort((a, b) => a.round - b.round);
+const showGames = (games) => {
+  $('games').innerHTML = games.map((g, i) => `<li><span class="tag">${TAGS[i]}</span><span class="balls">${g.map((n) => ball(n)).join('')}</span></li>`).join('');
+};
+function setGames(games) {
+  lastGames = games;
+  if (drafts.active || drafts.queue.length) { drafts = discardDrafts(); renderForm(); } // 새 번호가 나오면 이전 초안 폐기
+  showGames(games);
+}
 function generate() {
+  if (genMode === 'stat') { renderStats(); return; }
   const filter = $('filter').checked;
   try {
     const { games, stats } = generateGames({ count: 10, filter });
-    lastGames = games;
-    if (drafts.active || drafts.queue.length) { drafts = discardDrafts(); renderForm(); } // 새 번호 생성 시 이전 초안 폐기
-    $('games').innerHTML = games.map((g, i) => `<li><span class="tag">${TAGS[i]}</span><span class="balls">${g.map((n) => ball(n)).join('')}</span></li>`).join('');
+    setGames(games);
     const rej = Object.values(stats.rejected).reduce((a, b) => a + b, 0);
     $('stat').textContent = filter ? `시도 ${stats.tries}회 · 필터 제외 ${rej}회` : `시도 ${stats.tries}회 · 필터 꺼짐`;
   } catch (e) {
@@ -304,8 +363,105 @@ function generate() {
     $('stat').textContent = '';
   }
 }
+function setMode(m) {
+  genMode = m; lsSet(LS_MODE, m);
+  $('mode-stat').setAttribute('aria-pressed', String(m === 'stat'));
+  $('mode-rand').setAttribute('aria-pressed', String(m === 'rand'));
+  $('statBox').hidden = m !== 'stat';
+  $('randBox').hidden = m !== 'rand';
+  generate();
+}
+$('mode-stat').addEventListener('click', () => setMode('stat'));
+$('mode-rand').addEventListener('click', () => setMode('rand'));
 $('go').addEventListener('click', generate);
 $('filter').addEventListener('change', generate);
+
+/** 통계 추천 + 번호별 통계 (자동 수집 공식 자료만 사용, 과거 검증과 같은 조건) */
+let statKey = '';
+function renderStats() {
+  const ds = officialDraws();
+  const ok = ds.length >= STRATEGY.window && ds.every((d, i) => d.round === i + 1);
+  if (!ok) {
+    if (genMode === 'stat') {
+      $('statTitle').textContent = '통계 추천';
+      $('statRule').textContent = '통계 추천은 1회부터 최신 회차까지 자동 수집 자료가 모두 있어야 만들 수 있어요. 지금은 자료가 부족해 무작위 탭을 이용해 주세요.';
+      lastGames = []; $('games').innerHTML = ''; $('stat').textContent = '';
+    }
+    $('numBody').innerHTML = '<p class="note">자동 수집 자료가 부족해 통계를 낼 수 없어요.</p>';
+    return;
+  }
+  const t = ds.length + 1;
+  const key = `${t}`;
+  if (genMode === 'stat') {
+    $('statTitle').textContent = `${t}회용 통계 추천 10게임`;
+    $('statRule').textContent = `규칙: 1~${t - 1}회 자료만 사용. 최근 ${STRATEGY.window}회차(${t - STRATEGY.window}~${t - 1}회)에 자주 나온 번호일수록 더 잘 뽑히게 했어요(가중치 = 1 + 나온 횟수). 같은 회차에는 항상 같은 번호가 나와요.`;
+    if (statKey !== key || !lastGames.length) setGames(recommend(ds, t));
+    else showGames(lastGames);
+    $('stat').textContent = `${STRATEGY.name} · 자동 수집 ${t - 1}회까지 반영`;
+  }
+  if (statKey === key && $('numBody').childElementCount) return;
+  statKey = key;
+  const st = numberStats(ds, t);
+  const maxR = Math.max(...st.map((x) => x.recent));
+  const lv = (r) => (r >= maxR * 0.75 ? 'lv3' : r >= maxR * 0.5 ? 'lv2' : r >= maxR * 0.25 ? 'lv1' : 'lv0');
+  const chip = (x, v) => `<span>${ball(x.n)}${v}</span>`;
+  const hot = [...st].sort((a, b) => b.recent - a.recent || a.n - b.n).slice(0, 8);
+  const cold = [...st].sort((a, b) => b.gap - a.gap || a.n - b.n).slice(0, 8);
+  const allTop = [...st].sort((a, b) => b.all - a.all || a.n - b.n).slice(0, 8);
+  const pairs = topPairs(ds, t, 5);
+  $('numBody').innerHTML = `
+    <p class="note">1~${t - 1}회 자동 수집 자료 기준. 과거에 많이 나왔다고 앞으로 더 잘 나오지는 않아요.</p>
+    <h3>최근 ${STRATEGY.window}회차 출현 횟수</h3>
+    <div class="heat">${st.map((x) => `<div><span class="ball r${band(x.n)} ${lv(x.recent)}">${x.n}</span>${x.recent}</div>`).join('')}</div>
+    <h3>최근 ${STRATEGY.window}회차에 많이 나온 번호</h3><div class="chips">${hot.map((x) => chip(x, `${x.recent}번`)).join('')}</div>
+    <h3>오래 안 나온 번호</h3><div class="chips">${cold.map((x) => chip(x, `${x.gap}회째`)).join('')}</div>
+    <h3>역대 많이 나온 번호</h3><div class="chips">${allTop.map((x) => chip(x, `${x.all}번`)).join('')}</div>
+    <h3>함께 많이 나온 번호쌍</h3><div class="chips">${pairs.map((p) => `<span>${ball(p.a)}${ball(p.b)}${p.count}번</span>`).join('')}</div>`;
+}
+
+/** 과거 검증 결과 표시 */
+async function loadBacktest() {
+  let data = BACKTEST_INLINE;
+  if (!data) {
+    try {
+      const r = await fetch('./draws/backtest.json', { cache: 'no-cache' });
+      if (r.ok) { data = await r.json(); lsSet('dada-lotto-backtest', JSON.stringify(data)); }
+    } catch { /* 오프라인 */ }
+    if (!data) { try { data = JSON.parse(lsGet('dada-lotto-backtest') || 'null'); } catch { data = null; } }
+  }
+  backtestData = data;
+  renderBacktest();
+}
+function renderBacktest() {
+  const d = backtestData?.preRegistered;
+  if (!d) { $('btBody').innerHTML = '<p class="note">과거 검증 결과를 불러오지 못했어요. 인터넷에 연결된 뒤 다시 열어 주세요.</p>'; return; }
+  const c = d.compare;
+  const won = (v) => `${Math.round(v).toLocaleString('ko-KR')}원`;
+  const num = (v) => (Number.isInteger(v) ? v.toLocaleString('ko-KR') : v.toFixed(1));
+  const row = (label, k, fmt = num) =>
+    `<tr><td>${label}</td><td><b>${fmt(c[k].strategy)}</b></td><td>${fmt(c[k].random.mean)}<br><small>${fmt(c[k].random.min)}~${fmt(c[k].random.max)}</small></td></tr>`;
+  const h = c.hit3plus;
+  const inRange = h.strategy >= h.random.min && h.strategy <= h.random.max;
+  const where = `무작위 ${d.seeds}번 중 ${h.random.below}번보다 많고 ${d.seeds - h.random.below - h.random.equal}번보다 적어요`;
+  const post = backtestData.afterRegistration;
+  $('btBody').innerHTML = `
+    <p class="note">${d.from}~${d.to}회(${d.rounds}회차)에 매주 10게임(1만원)씩 샀다고 가정하고, 그 회차 직전까지의 자료로만 만든 추천을 실제 결과와 맞춰 봤어요. 무작위는 같은 조건으로 ${d.seeds}번 반복했어요. 규칙과 구간은 결과를 보기 전에 정했어요.</p>
+    <div style="overflow-x:auto"><table class="bt">
+      <thead><tr><th></th><th>통계 추천</th><th>무작위 평균<br>(최소~최대)</th></tr></thead>
+      <tbody>
+        ${row('3개 이상 일치', 'hit3plus')}
+        ${row('3개 일치 (5등)', 'match3')}
+        ${row('4개 일치 (4등)', 'match4')}
+        ${row('5개 일치 (3·2등)', 'match5')}
+        ${row('6개 일치 (1등)', 'match6')}
+        ${row('당첨금 합계', 'prize', won)}
+        <tr><td>구매액</td><td colspan="2">${won(d.spend)}</td></tr>
+      </tbody>
+    </table></div>
+    <p class="verdict">3개 이상 일치는 통계 추천 ${h.strategy}게임, ${where}. ${inRange ? '무작위로 뽑았을 때 나올 수 있는 범위 안이에요.' : '무작위 범위를 벗어났어요. 다만 한 번의 결과라 우연일 수 있어요.'} 당첨금은 5개 일치 같은 드문 결과 한두 번에 크게 흔들려서 실력 비교에 쓰기 어려워요. 과거 결과가 앞으로의 결과를 보장하지 않아요.</p>
+    ${post ? `<p class="note">추천 규칙을 정한 뒤 새로 쌓인 ${post.from}~${post.to}회: 3개 이상 일치 ${post.compare.hit3plus.strategy}게임 (무작위 평균 ${post.compare.hit3plus.random.mean.toFixed(1)}게임)</p>` : '<p class="note">추천 규칙을 정한 뒤의 회차(1249회~) 결과는 매주 자동으로 여기에 따로 쌓여요.</p>'}`;
+}
+
 $('toMy').addEventListener('click', () => {
   if (!lastGames.length) { show('gen'); return; }
   clearForm();
@@ -651,8 +807,9 @@ $('wipeYes').addEventListener('click', async () => {
 });
 
 // ---------- 시작 ----------
-generate();
+setMode(genMode);
 await loadDraws();
+loadBacktest();
 clearForm();
 renderForm();
 await refresh();

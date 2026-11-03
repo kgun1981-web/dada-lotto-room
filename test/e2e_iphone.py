@@ -64,6 +64,8 @@ with sync_playwright() as p:
     page.tap('#tab-gen')
 
     # 4. 패턴 회피 토글
+    page.tap('#mode-rand')
+    check('무작위 모드 전환', page.is_visible('#randBox') and not page.is_visible('#statBox'))
     page.tap('#filter')
     check('패턴 회피 끄기 → 재생성', '필터 꺼짐' in page.inner_text('#stat'))
     page.tap('#filter')
@@ -148,7 +150,7 @@ with sync_playwright() as p:
     page.reload(wait_until='load')
     page.wait_for_timeout(800)
     check('오프라인에서 화면 열림', page.title() == '다다의 복권방')
-    check('오프라인 상태 표시(저장된 사본)', '저장된 사본' in page.inner_text('#status'), page.inner_text('#status'))
+    check('오프라인 상태 표시(최신 확인 실패, 이전 자료 사용)', '최신 확인 실패, 이전에 받은 자료 사용' in page.inner_text('#status'), page.inner_text('#status'))
     page.tap('#tab-my')
     check('오프라인에서 저장 복권 조회', page.locator('#list [data-id]').count() == 3)
     check('오프라인에서 기존 회차 판정 유지', '1등' in page.inner_text('#list'))
