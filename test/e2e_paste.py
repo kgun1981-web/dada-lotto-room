@@ -6,7 +6,8 @@ from e2e_common import import_pack
 from playwright.sync_api import sync_playwright
 
 BASE = sys.argv[1]
-FULL = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures-paste-1248.txt'), encoding='utf8').read()
+# 실제 복사본은 로컬 전용 (test/local/, 공개 저장소에 없음). 보관 자료 파일도 로컬 전용이라 이 테스트는 로컬에서만 실행
+FULL = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'local', 'fixtures-paste-1248.txt'), encoding='utf8').read()
 results = []
 def check(name, ok, detail=''):
     results.append((name, bool(ok), detail))
@@ -70,6 +71,12 @@ with sync_playwright() as p:
     r = paste(page, FULL.replace('\n45\n+', '\n44\n+'))
     check('다른 번호는 저장 안 함', '1247회' in r and '달라요' in r and '저장하지 않았어요' in r, r.replace('\n', ' ')[:160])
 
+    r = paste(page, FULL.replace('\n27\n', '\n18\n'))
+    check('번호 중복 읽힘 → 저장 안 하고 입력칸 안내', '1248회' in r and '번호' in r and page.locator('[data-fill]').count() >= 1 and page.locator('#pasteResult input[data-pi]').count() == 0, r.replace('\n', ' ')[:200])
+    page.locator('[data-fill]').first.tap(); page.wait_for_timeout(200)
+    check('불완전한 번호는 입력칸에 채우지 않음(회차만)', page.input_value('#d0') == '' and page.input_value('#dRound') == '1248')
+    page.tap('#drawCancel') if page.is_visible('#drawCancel') else None
+    page.fill('#dRound', '')
     r = paste(page, '16\n18\n27\n36\n38\n42\n+\n보너스번호\n22')
     check('회차 없는 복사: 입력칸 채우기 버튼', '회차를 찾지 못했어요' in r and page.locator('[data-fill]').count() == 1)
     page.tap('[data-fill]'); page.wait_for_timeout(200)
@@ -77,13 +84,16 @@ with sync_playwright() as p:
     page.tap('#drawCancel') if page.is_visible('#drawCancel') else None
 
     nxt = FULL.replace('1248회', '1249회').replace('제 1248회', '제 1249회').replace('2026.10.31', '2026.11.07').replace('\n16\n18\n27\n36\n38\n42\n', '\n1\n2\n3\n4\n5\n6\n')
-    r = paste(page, nxt)
-    check('새 회차: 새로 저장', '1249회' in r and '새로 저장' in r, r.replace('\n', ' ')[:160])
+    r = paste(page, nxt.replace('제 1247회', '제 1250회').replace('2026.10.24', '2026.11.14'))
+    boxes = page.locator('#pasteResult input[data-pi]')
+    check('숨은 옆 회차(새 회차)는 기본 선택 안 함 + 안내', boxes.count() == 2 and page.locator('#pasteResult input[data-pi]:checked').count() == 1 and page.is_visible('#pasteHint'), r.replace('\n', ' ')[:160])
+    check('새 회차: 새로 저장', '1249회' in r and '새로 저장' in r)
     page.tap('#pasteSave'); page.wait_for_timeout(300)
+    check('체크 안 한 1250회는 저장 안 됨', page.locator('#drawList [data-round="1250"]').count() == 0)
     check('새 회차 저장 → 판정 가능 1249회', '마지막 1249회' in page.inner_text('#status'), page.inner_text('#status'))
     add_ticket(page, 1249, [[1, 2, 3, 4, 5, 6]])
     t = ticket_text(page, 1249)
-    check('새 회차 1등 금액은 표 기준 + 직접 입력 경고', '1등 · 1,933,658,450원' in t and '직접 입력한 당첨번호 기준' in t, t.replace('\n', ' ')[:140])
+    check('새 회차 1등 금액은 표 기준 + 직접 입력 경고', '1등 · 1,933,658,450원' in t and '직접 붙여넣은 당첨번호 기준' in t, t.replace('\n', ' ')[:140])
 
     page.tap('#tab-backup'); page.tap('#export'); page.wait_for_timeout(300)
     bk = json.loads(page.input_value('#bkText'))

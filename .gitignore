@@ -3,3 +3,4 @@ node_modules/
 *.zip
 # 당첨번호 원자료는 공개 저장소에 올리지 않음 (김동건 휴대폰·로컬에만 보관, DESIGN.md 19절)
 draws/lotto645.json
+test/local/

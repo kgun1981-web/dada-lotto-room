@@ -39,28 +39,75 @@ test('추첨일 계산: 알려진 회차와 일치', () => {
   assert.equal(saturdayOf(1249), '2026-11-07');
 });
 
-import { readFileSync } from 'node:fs';
-const FULL = readFileSync(new URL('./fixtures-paste-1248.txt', import.meta.url), 'utf8');
-test('결과 화면 전체 복사 (2026-11-04 김동건 실제 복사본): 1247·1248회 번호, 1248회 당첨금', () => {
-  const r = parsePasted(FULL);
-  assert.equal(r.current, 1248);
-  assert.equal(r.items.length, 2);
-  const [a, b] = r.items;
-  assert.deepEqual([a.round, a.date, a.numbers, a.bonus], [1247, '2026-10-24', [8, 14, 21, 22, 42, 45], 24]);
-  assert.deepEqual([b.round, b.date, b.numbers, b.bonus], [1248, '2026-10-31', [16, 18, 27, 36, 38, 42], 22]);
-  assert.equal(a.ranks, undefined, '숨은 옆 회차에는 당첨금 표를 붙이지 않음');
-  assert.deepEqual(b.ranks, [
-    { rank: 1, winners: 15, amount: 1933658450 }, { rank: 2, winners: 91, amount: 53122485 },
-    { rank: 3, winners: 3265, amount: 1480597 }, { rank: 4, winners: 167745, amount: 50000 }, { rank: 5, winners: 2723467, amount: 5000 },
-  ]);
+import { readFileSync, existsSync } from 'node:fs';
+import { page, block, table, A, B, RANKS } from './_paste_fixture.mjs';
+const pick = (x) => [x.round, x.date, x.numbers, x.bonus];
+
+test('결과 화면 전체 복사: 숨은 옆 회차도 번호를 읽고, 당첨금 표는 고른 회차에만', () => {
+  const r = parsePasted(page());
+  assert.equal(r.current, B.round);
+  assert.deepEqual(r.items.map(pick), [pick(A), pick(B)]);
+  assert.equal(r.items[0].ranks, undefined);
+  assert.deepEqual(r.items[1].ranks, RANKS);
+});
+test('회차 선택칸이 앞 회차면 표도 앞 회차에 붙음', () => {
+  const r = parsePasted(page({ selected: A.round }));
+  assert.deepEqual(r.items[0].ranks, RANKS);
+  assert.equal(r.items[1].ranks, undefined);
 });
 test('표 안의 "5개번호 일치 + 보너스번호 일치"가 번호 읽기에 섞이지 않음', () => {
-  const r = parsePasted(FULL);
-  assert.equal(r.items[1].bonus, 22);
+  const r = parsePasted(page());
+  assert.equal(r.items[1].bonus, B.bonus);
   assert.equal(r.items[1].note, '');
 });
-test('표 없이 블록만 복사해도 번호는 읽음', () => {
-  const r = parsePasted(FULL.split('순위')[0]);
-  assert.equal(r.items.length, 2);
+test('회차 선택칸이 없고 블록이 여럿이면 금액은 저장하지 않음', () => {
+  const r = parsePasted(page({ selected: null }));
+  assert.equal(r.current, null);
+  assert.ok(r.items.every((x) => !x.ranks));
+  assert.match(r.items[1].note, /어느 회차 것인지 확실하지 않아/);
+});
+test('선택칸 없어도 블록이 하나면 그 회차 표', () => {
+  const r = parsePasted(page({ selected: null, blocks: [B] }));
+  assert.deepEqual(r.items[0].ranks, RANKS);
+});
+test('표가 잘리면(3등까지) 금액 빼고 번호만', () => {
+  const r = parsePasted(page({ ranks: RANKS.slice(0, 3) }));
   assert.equal(r.items[1].ranks, undefined);
+  assert.match(r.items[1].note, /3등까지만 읽어서 금액은 빼고/);
+  assert.deepEqual(r.items[1].numbers, B.numbers);
+});
+test('표가 두 번 붙여넣어지면(여러 표) 금액 빼고 번호만', () => {
+  const r = parsePasted(page({ extra: table(RANKS.map((x) => ({ ...x, amount: x.amount + 1 }))) }));
+  assert.equal(r.items[1].ranks, undefined);
+  assert.match(r.items[1].note, /여러 개라/);
+});
+test('표 없이 블록만 복사해도 번호는 읽음', () => {
+  const r = parsePasted(page({ ranks: null }));
+  assert.equal(r.items.length, 2);
+  assert.ok(r.items.every((x) => !x.ranks && x.note === ''));
+});
+test('회차 표기 변형: 띄어쓰기 없음, 천 단위 쉼표', () => {
+  const r = parsePasted(['3,002회', block(B, '제3,002회추첨결과'), table()].join('\n'));
+  assert.equal(r.items[0].round, 3002);
+  assert.deepEqual(r.items[0].ranks, RANKS);
+});
+test('읽기 성공처럼 보이는 오인식은 표시해 둠: 번호 7개 이상', () => {
+  const bad = page({ blocks: [{ ...B, numbers: [1, ...B.numbers] }] , selected: B.round });
+  const r = parsePasted(bad);
+  assert.equal(r.items[0].guessed, true);
+});
+test('번호 중복·보너스 중복은 읽은 그대로 돌려줌(저장 단계에서 거부)', () => {
+  const r = parsePasted(page({ blocks: [{ ...B, numbers: [5, 5, 19, 27, 35, 43], bonus: 43 }], selected: B.round }));
+  assert.deepEqual(r.items[0].numbers, [5, 5, 19, 27, 35, 43]);
+  assert.equal(r.items[0].bonus, 43);
+});
+
+// 김동건이 실제로 복사한 화면 글: 로컬에만 있음 (공개 저장소에는 없음)
+const REAL = new URL('./local/fixtures-paste-1248.txt', import.meta.url);
+test('실제 복사본(로컬 전용): 1247·1248회 번호, 1248회 당첨금', { skip: !existsSync(REAL) && '로컬 실제 복사본 없음' }, () => {
+  const r = parsePasted(readFileSync(REAL, 'utf8'));
+  assert.equal(r.current, 1248);
+  assert.deepEqual(r.items.map((x) => x.round), [1247, 1248]);
+  assert.equal(r.items[1].bonus, 22);
+  assert.equal(r.items[1].ranks.length, 5);
 });

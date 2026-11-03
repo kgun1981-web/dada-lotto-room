@@ -186,6 +186,7 @@
       <div class="btns"><button class="btn primary" type="button" id="pasteRead">읽기</button><button class="btn" type="button" id="pasteClear">지우기</button></div>
       <p class="err" id="pasteErr" hidden></p>
       <div id="pasteResult" class="panel"></div>
+      <p class="note" id="pasteHint" hidden>결과 화면에 숨어 있던 옆 회차도 함께 읽혔어요. 그 회차도 저장하려면 직접 체크해 주세요.</p>
       <div class="btns" id="pasteSaveRow" hidden><button class="btn primary" type="button" id="pasteSave">선택한 회차 저장</button></div>
       <p class="ok" id="pasteMsg" hidden></p>
     </div>
@@ -634,7 +635,7 @@ function ticketHTML(t) {
   }).join('');
   const drawLine = j.status === 'judged'
     ? `<div class="draw">당첨번호 ${j.draw.numbers.map((n) => ball(n)).join('')} + ${ball(j.draw.bonus)} <span>(${esc(j.draw.date)})</span></div>` +
-      (isUserDraw(j.draw) ? '<p class="draw-warn">직접 입력한 당첨번호 기준 · 공식 결과와 대조 필요</p>' : '')
+      (isUserDraw(j.draw) ? `<p class="draw-warn">${j.draw.via === 'paste' ? '직접 붙여넣은' : '직접 입력한'} 당첨번호 기준 · 공식 결과와 대조 필요</p>` : '')
     : `<p class="note">판정 불가: ${esc(j.reason)} · 당첨번호 탭에서 직접 등록할 수 있어요</p>`;
   return `<div class="box" data-id="${t.id}">
     <div class="row"><h2>${t.round}회</h2><div class="btns"><button class="btn small" data-act="edit">수정</button><button class="btn small danger" data-act="del">삭제</button></div></div>
@@ -779,22 +780,25 @@ function renderPaste() {
     const table = it.ranks ? prizeTable(it.ranks) : '';
     switch (p.kind) {
       case 'new': case 'addPrize':
-        return `<div class="paste-item"><label><input type="checkbox" data-pi="${i}" checked><span>${head} · ${p.kind === 'new' ? '새로 저장' : '번호는 이미 있어요 · 당첨금 표만 저장'}</span></label>${nums}${table}${note}</div>`;
+        return `<div class="paste-item"><label><input type="checkbox" data-pi="${i}"${p.pick ? ' checked' : ''}><span>${head} · ${p.kind === 'new' ? '새로 저장' : '번호는 이미 있어요 · 당첨금 표만 저장'}</span></label>${nums}${table}${note}</div>`;
       case 'same':
         return `<div class="paste-item"><span>${head} · 이미 앱에 같은 내용이 있어요</span>${nums}${note}</div>`;
       case 'conflict':
         return `<div class="paste-item"><p class="err">${head} · 앱에 있는 번호(${esc(p.otherLabel)}: ${drawText(p.other)})와 달라요. 저장하지 않았어요. 결과 화면의 회차를 다시 확인해 주세요.</p>${nums}</div>`;
       default:
-        return `<div class="paste-item"><p class="err">${head} · ${esc(p.reason)}</p>${nums}${note}<div class="btns"><button class="btn small" type="button" data-fill="${i}">아래 입력칸에 채워서 확인</button></div></div>`;
+        return `<div class="paste-item"><p class="err">${head} · ${esc(p.reason)}</p>${nums}${note}<div class="btns"><button class="btn small" type="button" data-fill="${i}">${p.form.numbers.length ? '아래 입력칸에 채워서 확인' : '아래 입력칸으로 (번호는 직접 입력)'}</button></div></div>`;
     }
   }).join('');
-  $('pasteSaveRow').hidden = !pastePlans.some((p) => p.kind === 'new' || p.kind === 'addPrize');
+  const savable = pastePlans.filter((p) => p.kind === 'new' || p.kind === 'addPrize');
+  $('pasteSaveRow').hidden = !savable.length;
+  $('pasteHint').hidden = !savable.some((p) => !p.pick);
 }
 $('pasteRead').addEventListener('click', () => {
   $('pasteErr').hidden = true; $('pasteMsg').hidden = true;
   const r = parsePasted($('pasteText').value);
   if (!r.items.length) { pastePlans = []; renderPaste(); $('pasteErr').textContent = r.warning || '당첨번호를 찾지 못했어요'; $('pasteErr').hidden = false; return; }
-  pastePlans = r.items.map((item) => ({ item, ...planPasteItem(item, publicIdx, userDraws) }));
+  // 여러 회차가 읽히면 결과 화면에서 고른 회차만 기본 선택 (숨은 옆 회차는 사용자가 직접 체크)
+  pastePlans = r.items.map((item) => ({ item, pick: r.items.length === 1 || item.round === r.current, ...planPasteItem(item, publicIdx, userDraws) }));
   renderPaste();
 });
 $('pasteClear').addEventListener('click', () => { $('pasteText').value = ''; pastePlans = []; renderPaste(); $('pasteErr').hidden = true; $('pasteMsg').hidden = true; });
@@ -836,7 +840,7 @@ function renderDraws() {
   // 목록
   $('drawList').innerHTML = userDraws.length ? userDraws.map((d) => `
     <div class="box" data-round="${d.round}">
-      <div class="row"><h2>${d.round}회 <span class="note">직접 입력${d.ranks ? ' · 당첨금 표 있음' : ''}</span></h2><div class="btns"><button class="btn small" type="button" data-dact="edit">수정</button><button class="btn small danger" type="button" data-dact="del">삭제</button></div></div>
+      <div class="row"><h2>${d.round}회 <span class="note">${d.via === 'paste' ? '붙여넣기' : '직접 입력'}${d.ranks ? ' · 당첨금 표 있음' : ''}</span></h2><div class="btns"><button class="btn small" type="button" data-dact="edit">수정</button><button class="btn small danger" type="button" data-dact="del">삭제</button></div></div>
       <div class="draw">${d.numbers.map((n) => ball(n)).join('')} + ${ball(d.bonus)} <span>(${esc(d.date)})</span></div>
       ${d.ranks ? prizeTable(d.ranks) : ''}
       <div class="confirm" data-dconfirm hidden><p class="err">${d.round}회 직접 입력을 지울까요? 이 회차 복권은 판정 불가로 돌아갈 수 있어요.</p>
