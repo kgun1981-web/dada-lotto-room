@@ -11,6 +11,9 @@ const titleEnd = app.indexOf('</title>') + '</title>'.length;
 const head = app.slice(0, titleEnd).trim();
 const rest = app.slice(titleEnd).replace(/<meta name="claude:viewport-fit-sides"[^>]*>\s*/, '');
 const styleEnd = rest.indexOf('</style>') + '</style>'.length;
+// 화면에 보이는 버전: 배포 파일 생성 시각 (한국 시간)
+const kst = new Date(Date.now() + 9 * 3600 * 1000).toISOString();
+const APP_VERSION = kst.slice(0, 10).replace(/-/g, '.') + '-' + kst.slice(11, 16).replace(':', '');
 const deploy = `<!doctype html>
 <html lang="ko">
 <head>
@@ -32,14 +35,14 @@ ${rest.slice(styleEnd).trim()}
 </body>
 </html>
 `;
-writeFileSync('index.html', deploy);
+writeFileSync('index.html', deploy.replace('__APP_VERSION__', APP_VERSION));
 
 // 미리보기: lib·draws 내장
 const strip = (f) => readFileSync(f, 'utf8').replace(/^import .*$/gm, '').replace(/^export /gm, '');
 const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/drafts.js', 'lib/draws.js', 'lib/store.js'];
 const lib = LIBS.map(strip).join('\n');
 const draws = readFileSync('draws/lotto645.json', 'utf8');
-const preview = app
+const preview = app.replace('__APP_VERSION__', '미리보기')
   .replace(/\/\*__LIB__\*\/[\s\S]*?\/\*__END_LIB__\*\//, () => lib)
   .replace(/\/\*__DRAWS__\*\/null\/\*__END_DRAWS__\*\//, () => draws);
 writeFileSync('preview.html', preview);
@@ -56,5 +59,5 @@ writeFileSync('sw.js', readFileSync('sw.template.js', 'utf8')
 const bad = [...deploy.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]).filter((u) => u.startsWith('/') || /^https?:/.test(u));
 const imports = [...deploy.matchAll(/from '([^']+)'/g)].map((m) => m[1]).filter((u) => !u.startsWith('./'));
 if (bad.length || imports.length) { console.error('경로 오류:', bad, imports); process.exit(1); }
-console.log('sw.js version', version, '/ 경로 점검 통과');
+console.log('app', APP_VERSION, '/ sw.js version', version, '/ 경로 점검 통과');
 console.log('index.html', deploy.length, 'bytes / preview.html', preview.length, 'bytes');

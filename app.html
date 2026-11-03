@@ -79,6 +79,7 @@
     <h1>다다의 복권방</h1>
     <p class="status" id="status">당첨 데이터 불러오는 중…</p>
     <p class="status err" id="drawWarn" hidden></p>
+    <div class="notice" id="updateNote" hidden><span>새 버전이 준비됐어요. 입력 중인 내용을 저장한 뒤 적용하세요.</span><div class="btns"><button class="btn small" type="button" id="applyUpdate">새 버전 적용</button></div></div>
   </header>
 
   <nav role="tablist">
@@ -151,7 +152,7 @@
     </div>
   </section>
 
-  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.</footer>
+  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">__APP_VERSION__</span></footer>
 </div>
 
 <script type="module">
@@ -463,7 +464,23 @@ renderForm();
 await refresh();
 
 // 홈 화면 앱(PWA): 배포 주소(HTTPS)에서만 등록, 저장소 하위 경로 기준 상대경로
+// 업데이트: 앱을 열 때·다시 화면에 돌아올 때 새 버전 확인 → 새 버전이 적용되면
+//   입력 중인 내용이 없으면 자동 새로고침, 있으면 "새 버전 적용" 안내
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !DRAWS_INLINE) {
-  navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* 등록 실패해도 앱은 동작 */ });
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  const formDirty = () => !!editingId || !!drafts.active || $('round').value.trim() !== '' ||
+    readRows().some((r) => r.some((v) => v !== ''));
+  const reloadNow = () => { if (!reloading) { reloading = true; location.reload(); } };
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return; // 첫 설치는 새로고침 불필요
+    if (formDirty()) $('updateNote').hidden = false; else reloadNow();
+  });
+  $('applyUpdate').addEventListener('click', reloadNow);
+  navigator.serviceWorker.register('./sw.js', { scope: './' }).then((reg) => {
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    check();
+  }).catch(() => { /* 등록 실패해도 앱은 동작 */ });
 }
 </script>

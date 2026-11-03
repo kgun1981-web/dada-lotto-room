@@ -32,6 +32,7 @@ with sync_playwright() as p:
     # 1. 첫 접속
     page.goto(BASE, wait_until='networkidle')
     check('제목 "다다의 복권방"', page.title() == '다다의 복권방', page.title())
+    check('화면에 버전 표시', page.inner_text('#appVer').startswith('20'), page.inner_text('#appVer'))
     check('상단 상태줄 표시', '판정 가능' in page.inner_text('#status'), page.inner_text('#status'))
     check('번호 10게임 표시', page.locator('#games li').count() == 10)
     games = [li.inner_text().split() for li in page.locator('#games li').all()]
@@ -155,21 +156,36 @@ with sync_playwright() as p:
     check('오프라인에서 번호 생성', page.locator('#games li').count() == 10)
     ctx.set_offline(False)
 
-    # 12. 앱 업데이트(서비스 워커 새 버전) 후 기록 유지
+    # 12. 앱 업데이트(서비스 워커 새 버전): 입력 없으면 자동 새로고침, 입력 중이면 안내만
     import os, re
     sw_path = os.environ.get('SW_PATH')
     if sw_path:
         old = open(sw_path).read()
         old_ver = re.search(r"VERSION = '([^']+)'", old).group(1)
-        open(sw_path, 'w').write(old.replace(old_ver, old_ver + 'u'))
         try:
-            page.evaluate('navigator.serviceWorker.getRegistration().then(r => r.update())')
-            page.wait_for_timeout(1500)
             page.reload(wait_until='networkidle')
+            loads = []
+            page.on('load', lambda: loads.append(1))
+            open(sw_path, 'w').write(old.replace(old_ver, old_ver + 'u'))
+            page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")  # 앱으로 돌아온 상황
+            page.wait_for_timeout(3000)
+            check('새 버전 감지 후 자동 새로고침(입력 없음)', len(loads) >= 1, f'load {len(loads)}회')
             keys = page.evaluate('caches.keys()')
             check('업데이트 후 새 캐시만 남음', keys == [f'dada-lotto-{old_ver}u'], str(keys))
             page.tap('#tab-my')
             check('업데이트 후 기록 3장 유지', page.locator('#list [data-id]').count() == 3)
+            # 입력 중일 때는 자동 새로고침하지 않고 안내
+            page.fill('#round', '1300')
+            loads.clear()
+            open(sw_path, 'w').write(old.replace(old_ver, old_ver + 'v'))
+            page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+            page.wait_for_timeout(3000)
+            check('입력 중에는 자동 새로고침 안 함', len(loads) == 0 and page.input_value('#round') == '1300')
+            check('입력 중에는 "새 버전 적용" 안내 표시', page.is_visible('#updateNote'))
+            with page.expect_navigation(timeout=5000):
+                page.tap('#applyUpdate')
+            page.wait_for_load_state('networkidle')
+            check('"새 버전 적용" 누르면 새로고침', len(loads) >= 1 and page.input_value('#round') == '')
         finally:
             open(sw_path, 'w').write(old)
 
