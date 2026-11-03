@@ -6,6 +6,7 @@ import {
   loadDrawSet, isValidDate, parseRowCells, needsBackupReminder,
 } from '../lib/tickets.js';
 import { InputError } from '../lib/lotto.js';
+import { realOrSynthetic } from './_data.mjs';
 import { makeBackup, readBackup } from '../lib/backup.js';
 
 const FIX = [{ round: 1000, date: '2022-01-29', numbers: [1, 2, 3, 4, 5, 6], bonus: 7, status: 'press_verified' }];
@@ -77,8 +78,8 @@ test('검증 실패·미검증 데이터는 판정에 사용 안 함', () => {
   assert.equal(bad.size, 0);
   assert.equal(judgeTicket({ round: 5, games: [[1, 2, 3, 4, 5, 6]] }, bad).status, 'pending');
 });
-test('실제 데이터 파일 전체가 판정용 인덱스에 들어감', () => {
-  const data = JSON.parse(readFileSync(new URL('../draws/lotto645.json', import.meta.url)));
+test('당첨번호 자료 전체가 판정용 인덱스에 들어감', () => {
+  const data = { draws: realOrSynthetic() };
   assert.equal(indexDraws(data.draws).size, data.draws.length);
 });
 
@@ -101,7 +102,7 @@ test('백업: 같은 회차·번호라도 id가 다르면 따로 산 복권으�
   assert.equal(r.skipped, 0);
 });
 test('백업: 지원하지 않는 버전·버전 없음 거부', () => {
-  for (const v of [3, 0, '1', undefined]) {
+  for (const v of [4, 0, '1', undefined]) {
     const text = JSON.stringify({ kind: 'dada-lotto-backup', version: v, tickets: [] });
     assert.throws(() => readBackup(text), /버전/);
   }

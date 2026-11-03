@@ -41,7 +41,8 @@ test('robots.txt: 금지 규칙 판단', () => {
 });
 
 // ---- 저장 판단 ----
-const REAL = JSON.parse(readFileSync(new URL('../draws/lotto645.json', import.meta.url))).draws;
+import { synthetic } from './_data.mjs';
+const REAL = synthetic(); // 실제 자료는 공개 저장소에 없으므로 합성 자료로 시험 (알려진 회차는 실제 값)
 const REAL_MAX = Math.max(...REAL.map((d) => d.round));
 test('저장 판단: 실제 전체 파일은 통과', () => assert.equal(decideWrite([], REAL).ok, true));
 test('저장 판단: 0건 거부 (2026-11-03 사고 재현)', () => assert.equal(decideWrite(REAL, []).ok, false));
@@ -77,7 +78,7 @@ const listFor = (rounds) => JSON.stringify({ data: { list: rounds } });
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'dada-fetch-'));
   const file = join(dir, 'lotto645.json');
-  copyFileSync(new URL('../draws/lotto645.json', import.meta.url), file);
+  writeFileSync(file, JSON.stringify({ count: REAL.length, latest: REAL.length, draws: REAL }) + '\n');
   return { file, before: readFileSync(file, 'utf8') };
 }
 /** routes: robots / page / api → {status, body} 또는 함수 */

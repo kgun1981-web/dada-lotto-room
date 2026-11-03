@@ -109,3 +109,62 @@ test('백업 당첨번호 일부 오류 → 그 항목만 오류', () => {
   assert.equal(r.drawsAdded.length, 1);
   assert.equal(r.errors.length, 1);
 });
+
+// ---- 백업 v3: 휴대폰에 보관하는 당첨번호 자료 ----
+import { synthetic } from './_data.mjs';
+import { validateSavedDraw } from '../lib/backup.js';
+const SYN = synthetic(30).map((d) => ({ round: d.round, date: d.date, numbers: d.numbers, bonus: d.bonus }));
+const pack = (draws, extra = {}) => JSON.stringify({ kind: 'dada-lotto-backup', version: 3, tickets: [], userDraws: [], drawsSource: '시험', draws, ...extra });
+
+test('v3 당첨번호 파일: 1~30회 불러오기, 회차·날짜·번호·보너스만 + 출처 표시', () => {
+  const r = readBackup(pack(SYN), [], [], []);
+  assert.equal(r.savedAdded.length, 30);
+  assert.deepEqual(Object.keys(r.savedAdded[0]).sort(), ['bonus', 'date', 'numbers', 'round', 'source', 'status']);
+  assert.equal(r.savedAdded[0].status, 'official_verified');
+  assert.equal(r.savedRejected, '');
+});
+test('v3: 이미 있는 같은 값은 건너뛰고, 다음 회차만 추가', () => {
+  const have = SYN.slice(0, 20).map((d) => validateSavedDraw(d));
+  const r = readBackup(pack(SYN), [], [], have);
+  assert.equal(r.savedAdded.length, 10);
+  assert.equal(r.savedSkipped, 20);
+});
+test('v3: 같은 회차 다른 값은 덮어쓰지 않음', () => {
+  const have = SYN.map((d) => validateSavedDraw(d));
+  const changed = SYN.map((d) => (d.round === 5 ? { ...d, bonus: d.numbers.includes(45) ? 44 : 45 } : d));
+  const r = readBackup(pack(changed), [], [], have);
+  assert.deepEqual(r.savedConflicts, [5]);
+  assert.equal(r.savedAdded.length, 0);
+});
+test('v3: 중간 회차가 빠지면 당첨번호 자료는 하나도 넣지 않음 (복권은 그대로 처리)', () => {
+  const t = validateTicket({ round: 3, games: [[1, 2, 3, 4, 5, 6]] });
+  const r = readBackup(JSON.stringify({ kind: 'dada-lotto-backup', version: 3, tickets: [t], userDraws: [], draws: SYN.filter((d) => d.round !== 10) }), [], [], []);
+  assert.equal(r.savedAdded.length, 0);
+  assert.match(r.savedRejected, /빠진 회차/);
+  assert.equal(r.added.length, 1);
+});
+test('v3: 잘못된 번호 1건이 있으면 자료 전체 거부', () => {
+  const bad = SYN.map((d) => (d.round === 7 ? { ...d, numbers: [1, 1, 2, 3, 4, 5] } : d));
+  assert.equal(readBackup(pack(bad), [], [], []).savedAdded.length, 0);
+});
+test('v3: draws 부분 손상 → 거부', () => {
+  assert.throws(() => readBackup(JSON.stringify({ kind: 'dada-lotto-backup', version: 3, tickets: [], userDraws: [] })), /손상/);
+});
+test('v3 백업 왕복: 복권 + 직접 입력 + 보관 당첨번호, 보관 자료는 번호만 저장', () => {
+  const saved = SYN.map((d) => validateSavedDraw(d, '시험 출처'));
+  const text = makeBackup([tk], [ud], saved);
+  const obj = JSON.parse(text);
+  assert.equal(obj.version, 3);
+  assert.deepEqual(Object.keys(obj.draws[0]).sort(), ['bonus', 'date', 'numbers', 'round']);
+  assert.equal(obj.drawsSource, '시험 출처');
+  const r = readBackup(text, [], [], []);
+  assert.equal(r.added.length, 1);
+  assert.equal(r.drawsAdded.length, 1);
+  assert.equal(r.savedAdded.length, 30);
+});
+test('휴대폰 보관용 파일(전달본) 형식으로 불러오기', () => {
+  // 2026-11-04 김동건에게 전달한 파일과 같은 구조
+  const r = readBackup(JSON.stringify({ kind: 'dada-lotto-backup', version: 3, exportedAt: '2026-11-04T06:00:00+09:00', note: 'x', drawsSource: '동행복권 결과 화면 (2026-11-03 수집)', tickets: [], userDraws: [], draws: SYN }), [], [], []);
+  assert.equal(r.savedAdded.length, 30);
+  assert.equal(r.savedAdded[0].source, '동행복권 결과 화면 (2026-11-03 수집)');
+});

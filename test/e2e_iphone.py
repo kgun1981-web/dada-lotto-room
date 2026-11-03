@@ -1,8 +1,10 @@
 # 배포판(index.html + sw.js) 브라우저 종단 테스트. 아이폰 화면 크기·터치로 실행.
 # 사용: 저장소 상위 폴더를 http://localhost:PORT/ 로 서빙한 뒤
 #   python3 test/e2e_iphone.py http://localhost:8765/dada-lotto-room/
-import sys, json
+import sys, json, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from playwright.sync_api import sync_playwright
+from e2e_common import import_pack
 
 BASE = sys.argv[1]
 results = []
@@ -32,6 +34,9 @@ with sync_playwright() as p:
     # 1. 첫 접속
     page.goto(BASE, wait_until='networkidle')
     check('제목 "다다의 복권방"', page.title() == '다다의 복권방', page.title())
+    check('당첨번호 자료 없을 때 불러오기 안내', '당첨번호 파일을 불러와' in page.inner_text('#status'), page.inner_text('#status'))
+    m = import_pack(page)
+    check('당첨번호 파일 불러오기 1248회차', '당첨번호 자료 1248회차 추가' in m, m[:60])
     check('화면에 버전 표시', page.inner_text('#appVer').startswith('20'), page.inner_text('#appVer'))
     check('상단 상태줄 표시', '판정 가능' in page.inner_text('#status'), page.inner_text('#status'))
     check('번호 10게임 표시', page.locator('#games li').count() == 10)
@@ -150,7 +155,7 @@ with sync_playwright() as p:
     page.reload(wait_until='load')
     page.wait_for_timeout(800)
     check('오프라인에서 화면 열림', page.title() == '다다의 복권방')
-    check('오프라인 상태 표시(최신 확인 실패, 이전 자료 사용)', '최신 확인 실패, 이전에 받은 자료 사용' in page.inner_text('#status'), page.inner_text('#status'))
+    check('오프라인에서도 휴대폰 보관 자료 1248회차', '휴대폰에 보관한 당첨번호 1248회차' in page.inner_text('#status'), page.inner_text('#status'))
     page.tap('#tab-my')
     check('오프라인에서 저장 복권 조회', page.locator('#list [data-id]').count() == 3)
     check('오프라인에서 기존 회차 판정 유지', '1등' in page.inner_text('#list'))
@@ -200,6 +205,7 @@ with sync_playwright() as p:
     origin = BASE.split('/dada-lotto-room')[0]
     ext = sorted({u for u in requests if not u.startswith(origin)})
     check('외부(다른 주소) 요청 없음', not ext, ', '.join(ext[:3]))
+    check('당첨번호 파일을 서버에서 받지 않음', not any('lotto645' in u for u in requests))
     real = [e for e in errors if 'ERR_INTERNET_DISCONNECTED' not in e]  # 오프라인 단계의 당첨 데이터 요청 실패는 의도된 동작
     check('스크립트·파일 오류 없음 (오프라인 단계 제외)', not real, ' | '.join(real[:3]))
 

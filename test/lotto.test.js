@@ -60,8 +60,9 @@ test('원본 배열 변경 없음', () => {
 });
 
 // ---- 실제 회차 데이터 (공식 수집 또는 수동 입력 픽스처) ----
-const data = JSON.parse(readFileSync(new URL('../draws/lotto645.json', import.meta.url)));
-test('실제 데이터 전체: 형식 검증, 1등·2등 판정, 출처 기록', () => {
+import { HAS_REAL, SKIP_REAL, realOrSynthetic } from './_data.mjs';
+const data = { draws: realOrSynthetic() };
+test('당첨번호 자료 전체: 형식 검증, 1등·2등 판정, 출처 기록', () => {
   for (const d of data.draws) {
     validateDraw(d);
     assert.ok(d.source.startsWith('https://'), `${d.round}회 출처`);
@@ -75,7 +76,7 @@ const KNOWN = {
   1208: { date: '2026-01-24', numbers: [6, 27, 30, 36, 38, 42], bonus: 25 },
   1209: { date: '2026-01-31', numbers: [2, 17, 20, 35, 37, 39], bonus: 24 },
 };
-test('알려진 회차 값과 일치 (언론·제3자 앱 대조)', () => {
+test('알려진 회차 값과 일치 (언론·제3자 앱 대조)', { skip: SKIP_REAL }, () => {
   for (const [r, k] of Object.entries(KNOWN)) {
     const d = data.draws.find((x) => x.round === Number(r));
     if (!d) continue;

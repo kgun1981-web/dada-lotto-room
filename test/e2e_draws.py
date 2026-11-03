@@ -1,6 +1,8 @@
 # 당첨번호 직접 등록 기능 브라우저 종단 테스트 (아이폰 13 에뮬레이션)
 # 사용: python3 test/e2e_draws.py http://localhost:8765/dada-lotto-room/
-import sys, json
+import sys, json, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from e2e_common import import_pack
 from playwright.sync_api import sync_playwright
 
 BASE = sys.argv[1]
@@ -55,7 +57,11 @@ with sync_playwright() as p:
     check('업데이트 후 이전 버전 복권 유지', '1249회' in ticket_text(page, 1249))
     check('당첨번호 없으면 판정 불가 + 등록 안내', '판정 불가' in ticket_text(page, 1249) and '당첨번호 탭' in ticket_text(page, 1249))
     ver = page.evaluate("new Promise(r => { const q = indexedDB.open('dada-lotto'); q.onsuccess = () => { r([q.result.version, [...q.result.objectStoreNames]]); q.result.close(); }; })")
-    check('저장소 v2로 업그레이드, 당첨번호 공간 추가', ver[0] == 2 and 'userDraws' in ver[1], str(ver))
+    check('저장소 v3로 업그레이드, 기존 복권 유지 + 당첨번호 공간 추가', ver[0] == 3 and 'userDraws' in ver[1] and 'draws' in ver[1], str(ver))
+    m = import_pack(page)
+    check('당첨번호 파일 불러오기', '1248회차 추가' in m, m[:60])
+    page.tap('#tab-my')
+    check('불러온 뒤 1248회 이전 복권은 판정, 1249회는 판정 불가', '판정 불가' in ticket_text(page, 1249))
 
     # 2. 탭 4개
     page.tap('#tab-draw')
@@ -147,7 +153,7 @@ with sync_playwright() as p:
     # 11. 백업 v2 왕복
     page.tap('#tab-backup'); page.tap('#export')
     bk = json.loads(page.input_value('#bkText'))
-    check('백업에 직접 입력 당첨번호 포함(v2)', bk['version'] == 2 and len(bk['userDraws']) == 1 and bk['userDraws'][0]['status'] == 'user_entered')
+    check('백업에 직접 입력 당첨번호 + 보관 자료 포함(v3)', bk['version'] == 3 and len(bk['userDraws']) == 1 and bk['userDraws'][0]['status'] == 'user_entered' and len(bk['draws']) == 1248)
     page.tap('#tab-draw')
     page.locator('#drawList [data-round="1249"] [data-dact=del]').tap()
     page.locator('#drawList [data-round="1249"] [data-dact=delNo]').tap()

@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { recommend, randomGames, numberStats, topPairs, before, backtest, score, STRATEGY, mulberry32 } from '../lib/stats.js';
 import { validateGame } from '../lib/lotto.js';
 
-const DRAWS = JSON.parse(readFileSync(new URL('../draws/lotto645.json', import.meta.url))).draws;
+import { SKIP_REAL, realOrSynthetic } from './_data.mjs';
+const DRAWS = realOrSynthetic();
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
 // ---- 미래 자료 누설 방지 ----
@@ -60,7 +61,7 @@ test('채점: 1·2·5등 계산과 당첨금 합', () => {
   const d = { numbers: [1, 2, 3, 4, 5, 6], bonus: 7, ranks: [1, 2, 3, 4, 5].map((r) => ({ rank: r, amount: r * 100 })) };
   const s = score([[1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 7], [1, 2, 3, 40, 41, 42], [40, 41, 42, 43, 44, 45]], d);
   assert.deepEqual(s.rank, [0, 1, 1, 0, 0, 1]);
-  assert.equal(s.prize, 100 + 200 + 500);
+  assert.equal(s.prize, 5000, '1·2등은 금액 없이 게임 수만, 5등 5,000원');
   assert.equal(s.match[0], 1);
 });
 test('난수: 0 이상 1 미만', () => {
@@ -69,19 +70,19 @@ test('난수: 0 이상 1 미만', () => {
 });
 
 // ---- 과거 검증 결과 파일 ----
-test('backtest.json: 사전 등록 구간·규칙과 일치, 다시 계산해도 같음', () => {
+test('backtest.json: 사전 등록 구간·규칙과 일치, 다시 계산해도 같음', { skip: SKIP_REAL }, () => {
   const saved = JSON.parse(readFileSync(new URL('../draws/backtest.json', import.meta.url)));
   assert.equal(saved.strategy.id, STRATEGY.id);
   assert.equal(saved.preRegistered.from, 601);
   assert.equal(saved.preRegistered.to, 1248);
   assert.equal(saved.preRegistered.seeds, 30);
-  const again = backtest(DRAWS, { from: 601, to: 1248, seeds: 30 });
+  const again = backtest(DRAWS.map((d) => ({ round: d.round, date: d.date, numbers: d.numbers, bonus: d.bonus })), { from: 601, to: 1248, seeds: 30 });
   assert.deepEqual(again.compare, saved.preRegistered.compare);
   const latest = Math.max(...DRAWS.map((d) => d.round));
   assert.equal(saved.dataLatest, latest);
   assert.deepEqual(saved.next.games, recommend(DRAWS, latest + 1));
 });
-test('무작위 기준선 평균이 이론값과 가까움 (3개 이상 일치, 648회 × 10게임)', () => {
+test('무작위 기준선 평균이 이론값과 가까움 (3개 이상 일치, 648회 × 10게임)', { skip: SKIP_REAL }, () => {
   const saved = JSON.parse(readFileSync(new URL('../draws/backtest.json', import.meta.url)));
   const C = (n, k) => { let r = 1; for (let i = 0; i < k; i++) r = (r * (n - i)) / (i + 1); return r; };
   const p = [3, 4, 5, 6].reduce((a, k) => a + C(6, k) * C(39, 6 - k), 0) / C(45, 6);

@@ -187,7 +187,7 @@
     <div class="notice warn" id="conflicts" hidden></div>
     <form class="box" id="drawForm" novalidate>
       <h2 id="drawTitle">당첨번호 직접 등록</h2>
-      <p class="note">1~1248회는 앱에 들어 있어요. 동행복권 이용약관(제12조, 특정 기능의 규칙적 호출 금지) 때문에 자동 수집은 멈췄어요. 1249회부터는 매주 토요일 추첨 뒤 여기서 직접 입력해 주세요.</p>
+      <p class="note">1~1248회 당첨번호는 휴대폰 안에 보관한 자료를 써요(백업 탭에서 당첨번호 파일을 한 번 불러오면 돼요). 동행복권 이용약관(제12조, 특정 기능의 규칙적 호출 금지) 때문에 자동 수집은 하지 않아요. 1249회부터는 추첨 뒤 여기서 직접 입력해 주세요.</p>
       <p class="note">동행복권 공식 결과(앱·홈페이지·방송)를 보고 그대로 입력하세요. 직접 입력한 번호로 판정한 결과에는 "공식 결과와 대조 필요"가 함께 표시됩니다.</p>
       <label class="f" for="dRound">회차<input type="number" id="dRound" inputmode="numeric" min="1" step="1" placeholder="공식 결과에 적힌 회차"></label>
       <label class="f" for="dDate">추첨일<input type="date" id="dDate"></label>
@@ -215,7 +215,7 @@
   <section class="panel" id="p-backup" hidden>
     <div class="box">
       <h2>백업 만들기</h2>
-      <p class="note">저장된 복권과 직접 입력한 당첨번호를 백업 내용으로 만듭니다. 버튼을 누를 때만 만들어지고 어디로도 보내지 않습니다. 복사한 내용은 메모 앱 등에 직접 붙여넣어 보관하세요. 복사나 파일 저장 버튼을 누른 시각을 '마지막 백업 작업'으로 기록합니다(보관 완료를 뜻하지는 않아요).</p>
+      <p class="note">저장된 복권, 직접 입력한 당첨번호, 휴대폰에 보관한 당첨번호 자료를 백업 내용으로 만듭니다. 버튼을 누를 때만 만들어지고 어디로도 보내지 않습니다. 복사한 내용은 메모 앱 등에 직접 붙여넣어 보관하세요. 복사나 파일 저장 버튼을 누른 시각을 '마지막 백업 작업'으로 기록합니다(보관 완료를 뜻하지는 않아요).</p>
       <p class="note" id="lastBk"></p>
       <div class="btns"><button class="btn" id="export" type="button">백업 만들기</button><button class="btn" id="copyBk" type="button" hidden>내용 복사</button></div>
       <p class="note" id="dlWrap" hidden><a id="dl" download="dada-lotto-backup.json" href="#">백업 파일 저장</a> (저장이 안 되면 위 '내용 복사'를 메모 앱에 붙여 두세요)</p>
@@ -238,19 +238,18 @@
     </div>
   </section>
 
-  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0453</span></footer>
+  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0600</span></footer>
 </div>
 
 <script type="module">
 /*__LIB__*/
 import { generateGames, FILTERS, RANK_LABEL, InputError } from './lib/lotto.js';
-import { parseRowCells, parseRound, validateTicket, judgeTicket, needsBackupReminder } from './lib/tickets.js';
+import { parseRowCells, parseRound, validateTicket, judgeTicket, needsBackupReminder, loadDrawSet } from './lib/tickets.js';
 import { validateUserDraw, mergeDraws, isUserDraw } from './lib/userdraws.js';
-import { makeBackup, readBackup } from './lib/backup.js';
+import { makeBackup, readBackup, validateSavedDraw } from './lib/backup.js';
 import { emptyDrafts, createDrafts, draftSaved, nextDraft, discardDrafts, canLoadNext } from './lib/drafts.js';
-import { chooseDrawData } from './lib/draws.js';
 import { recommend, numberStats, topPairs, STRATEGY, score as scoreGames } from './lib/stats.js';
-import { store, drawStore } from './lib/store.js';
+import { store, drawStore, savedDraws } from './lib/store.js';
 /*__END_LIB__*/
 const DRAWS_INLINE = /*__DRAWS__*/null/*__END_DRAWS__*/;
 const BACKTEST_INLINE = /*__BACKTEST__*/null/*__END_BACKTEST__*/;
@@ -263,7 +262,8 @@ const TAGS = 'ABCDEFGHIJ';
 
 let drawIdx = new Map();
 let publicIdx = new Map();
-let publicMeta = { ok: false, lastChecked: '', fromCache: false };
+let publicMeta = { ok: false };
+let saved = [];
 let userDraws = [];
 let conflicts = [];
 let drawEditRound = null;
@@ -279,27 +279,34 @@ const LS_DRAWS = 'dada-lotto-draws-good';
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* 저장 안 돼도 동작 */ } };
 
-// ---------- 당첨 데이터: 네트워크 우선, 실패·손상 시 마지막 정상 사본 ----------
+// ---------- 당첨 데이터: 휴대폰 안(IndexedDB)에 보관한 자료만 사용 (네트워크 요청 없음) ----------
+/** 예전 버전이 localStorage에 남긴 사본을 휴대폰 저장소로 옮김 (정상·연속일 때만), 옮긴 뒤 사본 삭제 */
+async function migrateOldCache() {
+  const text = lsGet(LS_DRAWS);
+  if (!text) return 0;
+  try {
+    const data = JSON.parse(text);
+    const list = (data.draws || []).map((d) => validateSavedDraw(d, '동행복권 결과 화면 (2026-11-03 수집)'));
+    const set = loadDrawSet(list);
+    if (set.rejected || set.warnings.length || !list.every((d, i) => d.round === i + 1)) return 0;
+    await savedDraws.putMany(list);
+    try { localStorage.removeItem(LS_DRAWS); } catch { /* 무시 */ }
+    return list.length;
+  } catch { return 0; }
+}
 async function loadDraws() {
-  let freshText = null;
-  if (DRAWS_INLINE) freshText = JSON.stringify(DRAWS_INLINE);
-  else {
-    try {
-      const r = await fetch('./draws/lotto645.json', { cache: 'no-cache' });
-      if (r.ok) freshText = await r.text();
-    } catch { /* 오프라인 */ }
-  }
-  const pick = chooseDrawData({ freshText, cachedText: lsGet(LS_DRAWS) });
-  if (pick.saveCache) lsSet(LS_DRAWS, freshText);
-  const set = pick.set;
-  publicIdx = pick.data && set ? set.index : new Map();
-  publicMeta = { ok: !!pick.data, lastChecked: pick.data?.lastChecked || '-', fromCache: pick.source === 'cache' };
+  try {
+    saved = await savedDraws.all();
+    if (!saved.length && await migrateOldCache()) saved = await savedDraws.all();
+  } catch { saved = []; }
+  let list = saved;
+  if (!list.length && DRAWS_INLINE) list = DRAWS_INLINE.draws.map((d) => validateSavedDraw(d, '미리보기')); // 미리보기 전용
+  const set = loadDrawSet(list);
+  publicIdx = set.rejected ? new Map() : set.index;
+  publicMeta = { ok: publicIdx.size > 0 };
   rebuildIndex();
-  const warns = [...pick.notices, ...((pick.data && set) ? set.warnings : [])];
-  if (warns.length) {
-    $('drawWarn').textContent = warns.slice(0, 3).join(' / ') + (warns.length > 3 ? ` 외 ${warns.length - 3}건` : '');
-    $('drawWarn').hidden = false;
-  }
+  $('drawWarn').hidden = !set.warnings.length;
+  if (set.warnings.length) $('drawWarn').textContent = '당첨번호 자료 경고: ' + set.warnings.slice(0, 3).join(' / ');
 }
 
 /** 공개 데이터 + 직접 입력 합치기, 상단 상태줄 갱신 */
@@ -315,8 +322,8 @@ function rebuildIndex() {
   const staleDays = knownLatest ? Math.floor((Date.now() - Date.parse(knownLatest.date + 'T21:00:00+09:00')) / 86400000) : null;
   const stale = staleDays != null && staleDays >= 7; // 마지막 회차 추첨 뒤 1주가 지나 새 토요일 추첨이 있었으면
   const pubPart = publicMeta.ok
-    ? `동행복권 결과 화면 기준 <b>${pubN}회차</b>(마지막 갱신 ${esc(publicMeta.lastChecked)}${official ? '' : ' · 공식 대조 전'}${publicMeta.fromCache ? ' · 최신 확인 실패, 이전에 받은 자료 사용' : ''})`
-    : '앱에 들어 있는 당첨번호를 불러오지 못함';
+    ? `휴대폰에 보관한 당첨번호 <b>${pubN}회차</b>${official ? '' : ' · 공식 대조 전'}`
+    : '당첨번호 자료가 없어요 · 백업 탭에서 당첨번호 파일을 불러와 주세요';
   $('staleNote').hidden = !stale;
   if (stale) $('staleNote').textContent = `${latest + 1}회 당첨번호를 직접 입력해 주세요. 앱에 있는 마지막 회차는 ${latest}회(${knownLatest.date})예요. 당첨번호 탭에서 입력할 수 있어요.`;
   $('status').innerHTML = `판정 가능 <b>${drawIdx.size}회차</b> · 마지막 <b>${latest || '-'}회</b> · ${pubPart}` +
@@ -473,11 +480,11 @@ function renderBacktest() {
         ${row('4개 일치 (4등)', 'match4')}
         ${row('5개 일치 (3·2등)', 'match5')}
         ${row('6개 일치 (1등)', 'match6')}
-        ${row('당첨금 합계', 'prize', won)}
+        ${row('4·5등 당첨금 합계', 'prize', won)}
         <tr><td>구매액</td><td colspan="2">${won(d.spend)}</td></tr>
       </tbody>
     </table></div>
-    <p class="verdict">3개 이상 일치는 통계 추천 ${h.strategy}게임, ${where}. ${inRange ? '무작위로 뽑았을 때 나올 수 있는 범위 안이에요.' : '무작위 범위를 벗어났어요. 다만 한 번의 결과라 우연일 수 있어요.'} 당첨금은 5개 일치 같은 드문 결과 한두 번에 크게 흔들려서 실력 비교에 쓰기 어려워요. 과거 결과가 앞으로의 결과를 보장하지 않아요.</p>
+    <p class="verdict">3개 이상 일치는 통계 추천 ${h.strategy}게임, ${where}. ${inRange ? '무작위로 뽑았을 때 나올 수 있는 범위 안이에요.' : '무작위 범위를 벗어났어요. 다만 한 번의 결과라 우연일 수 있어요.'} 당첨금은 4·5등 고정 금액만 더했고, 1~3등은 회차마다 금액이 달라 게임 수로만 셌어요. 과거 결과가 앞으로의 결과를 보장하지 않아요.</p>
     ${post ? `<p class="note">추천 규칙을 정한 뒤 새로 쌓인 ${post.from}~${post.to}회: 3개 이상 일치 ${post.compare.hit3plus.strategy}게임 (무작위 평균 ${post.compare.hit3plus.random.mean.toFixed(1)}게임)</p>` : ''}${afterRegHTML()}`;
 }
 
@@ -786,7 +793,7 @@ $('drawList').addEventListener('click', async (ev) => {
 let dlUrl = null;
 $('export').addEventListener('click', () => {
   if (!storeOk) return;
-  const text = makeBackup(tickets, userDraws);
+  const text = makeBackup(tickets, userDraws, saved);
   $('bkText').value = text; $('bkText').hidden = false; $('copyBk').hidden = false;
   if (dlUrl) URL.revokeObjectURL(dlUrl);
   dlUrl = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
@@ -806,12 +813,16 @@ $('importFile').addEventListener('change', async () => {
 $('importBtn').addEventListener('click', async () => {
   const msg = $('importMsg'); msg.hidden = false;
   try {
-    const r = readBackup($('importText').value, tickets, userDraws);
+    const r = readBackup($('importText').value, tickets, userDraws, saved);
     if (r.added.length) await store.putMany(r.added);
     if (r.drawsAdded.length) await drawStore.putMany(r.drawsAdded);
+    if (r.savedAdded.length) await savedDraws.putMany(r.savedAdded);
+    await loadDraws();
     await refresh();
-    msg.className = r.drawConflicts.length ? 'err' : 'ok';
-    msg.textContent = `복권 ${r.added.length}장 추가, 이미 있는 기록 ${r.skipped}장 건너뜀 (같은 번호라도 따로 저장한 복권은 모두 보존)` +
+    msg.className = r.drawConflicts.length || r.savedConflicts.length || r.savedRejected ? 'err' : 'ok';
+    msg.textContent = (r.savedAdded.length || r.savedSkipped ? `당첨번호 자료 ${r.savedAdded.length}회차 추가, 같은 값 ${r.savedSkipped}회차 건너뜀 · ` : '') +
+      (r.savedConflicts.length ? `${r.savedConflicts.slice(0, 3).join(', ')}회 당첨번호는 이 휴대폰 값과 달라 덮어쓰지 않았어요 · ` : '') +
+      `복권 ${r.added.length}장 추가, 이미 있는 기록 ${r.skipped}장 건너뜀 (같은 번호라도 따로 저장한 복권은 모두 보존)` +
       ` · 직접 입력 당첨번호 ${r.drawsAdded.length}회차 추가, 같은 값 ${r.drawsSkipped}회차 건너뜀` +
       (r.drawConflicts.length ? ` · ${r.drawConflicts.join(', ')}회는 이 휴대폰에 다른 값이 있어 덮어쓰지 않았어요` : '') +
       (r.errors.length ? ` · 오류 ${r.errors.length}건 (${r.errors.slice(0, 2).join(' / ')})` : '');

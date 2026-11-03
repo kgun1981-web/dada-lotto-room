@@ -1,7 +1,7 @@
 // app.html(본문) →
 //   index.html  : GitHub Pages 배포용 완전한 HTML 문서 (lib/·draws/ 를 직접 불러옴)
 //   preview.html: Claude 아티팩트 시험용 한 파일 (lib·draws 내장)
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const app = readFileSync('app.html', 'utf8');
@@ -39,9 +39,9 @@ writeFileSync('index.html', deploy.replace('__APP_VERSION__', APP_VERSION));
 
 // 미리보기: lib·draws 내장
 const strip = (f) => readFileSync(f, 'utf8').replace(/^import .*$/gm, '').replace(/^export /gm, '');
-const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/userdraws.js', 'lib/backup.js', 'lib/drafts.js', 'lib/draws.js', 'lib/stats.js', 'lib/store.js'];
+const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/userdraws.js', 'lib/backup.js', 'lib/drafts.js', 'lib/stats.js', 'lib/store.js'];
 const lib = LIBS.map(strip).join('\n');
-const draws = readFileSync('draws/lotto645.json', 'utf8');
+const draws = existsSync('draws/lotto645.json') ? readFileSync('draws/lotto645.json', 'utf8') : 'null';
 const preview = app.replace('__APP_VERSION__', '미리보기')
   .replace(/\/\*__LIB__\*\/[\s\S]*?\/\*__END_LIB__\*\//, () => lib)
   .replace(/\/\*__DRAWS__\*\/null\/\*__END_DRAWS__\*\//, () => draws)

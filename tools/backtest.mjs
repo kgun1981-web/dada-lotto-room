@@ -10,13 +10,14 @@ const OUT = fileURLToPath(new URL('../draws/backtest.json', import.meta.url));
 const PRE = { from: 601, to: 1248 };
 
 const data = JSON.parse(readFileSync(DRAWS, 'utf8'));
-const draws = data.draws;
+// 번호만 사용 (당첨금 자료는 쓰지 않음, 4·5등 고정 금액으로 계산)
+const draws = data.draws.map((d) => ({ round: d.round, date: d.date, numbers: d.numbers, bonus: d.bonus }));
 const latest = Math.max(...draws.map((d) => d.round));
 const started = Date.now();
 const pre = backtest(draws, { ...PRE, seeds: 30 });
 const post = latest > PRE.to ? backtest(draws, { from: PRE.to + 1, to: latest, seeds: 30 }) : null;
 const out = {
-  strategy: { id: STRATEGY.id, name: STRATEGY.name, window: STRATEGY.window, games: STRATEGY.games, registered: 'DESIGN.md 16절, 2026-11-04 커밋 c5deff0' },
+  strategy: { id: STRATEGY.id, name: STRATEGY.name, window: STRATEGY.window, games: STRATEGY.games, registered: 'DESIGN.md 16절, 2026-11-04 커밋 c5deff0', prizeRule: '4등 50,000원·5등 5,000원 고정, 1~3등은 게임 수만 (DESIGN.md 19절)' },
   dataLatest: latest,
   preRegistered: pre,
   afterRegistration: post,

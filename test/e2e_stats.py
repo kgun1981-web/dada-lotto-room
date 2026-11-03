@@ -1,5 +1,7 @@
 # 통계 추천·과거 검증 화면 브라우저 테스트 (아이폰 13 에뮬레이션)
-import sys, json
+import sys, json, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from e2e_common import import_pack
 from playwright.sync_api import sync_playwright
 BASE = sys.argv[1]
 results = []
@@ -10,7 +12,9 @@ with sync_playwright() as p:
     b = p.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox'])
     ctx = b.new_context(**p.devices['iPhone 13'], locale='ko-KR'); page = ctx.new_page()
     errors = []; page.on('pageerror', lambda e: errors.append(str(e)))
-    page.goto(BASE, wait_until='networkidle'); page.wait_for_timeout(500)
+    page.goto(BASE, wait_until='networkidle'); page.wait_for_timeout(300)
+    check('자료 없을 때 통계 추천 대신 안내', '빠짐없이' in page.inner_text('#statRule'))
+    import_pack(page); page.wait_for_timeout(300)
     t = bt['next']['round']
     check('기본은 통계 추천 모드', page.is_visible('#statBox') and not page.is_visible('#randBox'))
     check(f'제목에 {t}회용 표시', f'{t}회용 통계 추천' in page.inner_text('#statTitle'), page.inner_text('#statTitle'))
