@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#1f6b4f">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <title>다다의 복권방</title>
 <style>
   /* Layout: 한 열 도구. 상단 상태줄 + 탭 3개(번호 생성 / 내 복권 / 백업), 실제 로또 공 색 사용 */
@@ -414,7 +415,7 @@ renderForm();
 await refresh();
 
 // 홈 화면 앱(PWA): 배포 주소(HTTPS)에서만 등록, 저장소 하위 경로 기준 상대경로
-if ('serviceWorker' in navigator && location.protocol === 'https:' && !DRAWS_INLINE) {
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !DRAWS_INLINE) {
   navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* 등록 실패해도 앱은 동작 */ });
 }
 </script>

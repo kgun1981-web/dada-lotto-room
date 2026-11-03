@@ -3,7 +3,7 @@
 // - 쿼리 문자열은 무시하지 않음 (정확히 같은 주소만)
 // - draws/ 아래 당첨 데이터는 캐시하지 않음. 검증 후 정상 사본 저장은 앱이 직접 처리
 // - IndexedDB(구매 기록)는 건드리지 않음
-const VERSION = '9da3ab89c5';
+const VERSION = '8f8572800a';
 const CACHE = `dada-lotto-${VERSION}`;
 const FILES = ["./","./index.html","./lib/lotto.js","./lib/tickets.js","./lib/drafts.js","./lib/draws.js","./lib/store.js","./manifest.webmanifest","./icons/icon-180.png","./icons/icon-192.png","./icons/icon-512.png"];
 const SCOPE = new URL(self.registration.scope);

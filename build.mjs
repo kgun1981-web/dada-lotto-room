@@ -22,6 +22,7 @@ const deploy = `<!doctype html>
 <meta name="theme-color" content="#1f6b4f">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 ${head}
 ${rest.slice(0, styleEnd).trim()}
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)} body{margin:0} img{max-width:100%}</style>
