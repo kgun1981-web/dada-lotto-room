@@ -1,4 +1,4 @@
-// 동행복권 당첨번호 수집기 (GitHub Actions에서 실행, Node 20+)
+// 동행복권 당첨번호 수집기 — [사용 중지 2026-11-04: 이용약관 제12조 ①항 1·9호] 기록·시험용으로만 보관
 //
 // 데이터 출처: 공식 결과 페이지(/lt645/result)가 화면에서 쓰는 조회 주소
 //   GET /lt645/selectPstLt645InfoNew.do?srchDir=center&srchLtEpsd=<회차>
@@ -263,6 +263,10 @@ function fixtureFetch(path) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const mode = process.argv[2] || 'update';
   const fx = process.env.DADA_FETCH_FIXTURE;
+  if (!fx && process.env.ALLOW_DHLOTTERY_FETCH !== 'yes') {
+    console.error('수집 중지됨: 동행복권 이용약관 제12조 ①항 1·9호(2026-11-04 확인). 동행복권 허락 없이 실행하지 않음');
+    process.exit(1);
+  }
   run({
     mode,
     file: process.env.DADA_DRAWS_FILE || DEFAULT_FILE,

@@ -187,7 +187,7 @@
     <div class="notice warn" id="conflicts" hidden></div>
     <form class="box" id="drawForm" novalidate>
       <h2 id="drawTitle">당첨번호 직접 등록</h2>
-      <p class="note">당첨번호는 매주 일요일 새벽 동행복권 결과 화면에서 자동으로 받아와요(동행복권이 이 앱을 인증하거나 허가한 것은 아니에요). 자동 수집이 늦어질 때만 여기서 직접 입력하세요.</p>
+      <p class="note">1~1248회는 앱에 들어 있어요. 동행복권 이용약관(제12조, 특정 기능의 규칙적 호출 금지) 때문에 자동 수집은 멈췄어요. 1249회부터는 매주 토요일 추첨 뒤 여기서 직접 입력해 주세요.</p>
       <p class="note">동행복권 공식 결과(앱·홈페이지·방송)를 보고 그대로 입력하세요. 직접 입력한 번호로 판정한 결과에는 "공식 결과와 대조 필요"가 함께 표시됩니다.</p>
       <label class="f" for="dRound">회차<input type="number" id="dRound" inputmode="numeric" min="1" step="1" placeholder="공식 결과에 적힌 회차"></label>
       <label class="f" for="dDate">추첨일<input type="date" id="dDate"></label>
@@ -238,7 +238,7 @@
     </div>
   </section>
 
-  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0434</span></footer>
+  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0453</span></footer>
 </div>
 
 <script type="module">
@@ -249,7 +249,7 @@ import { validateUserDraw, mergeDraws, isUserDraw } from './lib/userdraws.js';
 import { makeBackup, readBackup } from './lib/backup.js';
 import { emptyDrafts, createDrafts, draftSaved, nextDraft, discardDrafts, canLoadNext } from './lib/drafts.js';
 import { chooseDrawData } from './lib/draws.js';
-import { recommend, numberStats, topPairs, STRATEGY } from './lib/stats.js';
+import { recommend, numberStats, topPairs, STRATEGY, score as scoreGames } from './lib/stats.js';
 import { store, drawStore } from './lib/store.js';
 /*__END_LIB__*/
 const DRAWS_INLINE = /*__DRAWS__*/null/*__END_DRAWS__*/;
@@ -311,17 +311,18 @@ function rebuildIndex() {
   const pubN = publicIdx.size;
   const userN = [...drawIdx.values()].filter(isUserDraw).length;
   const official = pubN && [...publicIdx.values()].every((d) => d.status === 'official_verified');
-  const pubLatest = pubN ? publicIdx.get(Math.max(...publicIdx.keys())) : null;
-  const staleDays = pubLatest ? Math.floor((Date.now() - Date.parse(pubLatest.date + 'T21:00:00+09:00')) / 86400000) : null;
-  const stale = staleDays != null && staleDays >= 9; // 토요일 추첨 후 다음 주 월요일까지 갱신이 없으면
+  const knownLatest = drawIdx.size ? drawIdx.get(latest) : null;
+  const staleDays = knownLatest ? Math.floor((Date.now() - Date.parse(knownLatest.date + 'T21:00:00+09:00')) / 86400000) : null;
+  const stale = staleDays != null && staleDays >= 7; // 마지막 회차 추첨 뒤 1주가 지나 새 토요일 추첨이 있었으면
   const pubPart = publicMeta.ok
     ? `동행복권 결과 화면 기준 <b>${pubN}회차</b>(마지막 갱신 ${esc(publicMeta.lastChecked)}${official ? '' : ' · 공식 대조 전'}${publicMeta.fromCache ? ' · 최신 확인 실패, 이전에 받은 자료 사용' : ''})`
-    : '자동 수집 당첨번호를 불러오지 못함';
+    : '앱에 들어 있는 당첨번호를 불러오지 못함';
   $('staleNote').hidden = !stale;
-  if (stale) $('staleNote').textContent = `자동 수집이 늦어지고 있어요. 마지막 자동 수집 회차는 ${pubLatest.round}회(${pubLatest.date})예요. 그 뒤 회차는 당첨번호 탭에서 직접 입력할 수 있어요.`;
+  if (stale) $('staleNote').textContent = `${latest + 1}회 당첨번호를 직접 입력해 주세요. 앱에 있는 마지막 회차는 ${latest}회(${knownLatest.date})예요. 당첨번호 탭에서 입력할 수 있어요.`;
   $('status').innerHTML = `판정 가능 <b>${drawIdx.size}회차</b> · 마지막 <b>${latest || '-'}회</b> · ${pubPart}` +
     (userN ? ` · 직접 입력 <b>${userN}회차</b>` : '');
   renderStats();
+  if (backtestData) renderBacktest();
 }
 
 // ---------- 탭 ----------
@@ -339,7 +340,8 @@ const LS_MODE = 'dada-lotto-gen-mode';
 let genMode = lsGet(LS_MODE) === 'rand' ? 'rand' : 'stat';
 let backtestData = null;
 $('rules').textContent = '제외 규칙: ' + Object.values(FILTERS).map((f) => f.label).join(', ');
-const officialDraws = () => [...publicIdx.values()].filter((d) => d.status === 'official_verified').sort((a, b) => a.round - b.round);
+// 통계에 쓰는 자료: 1248회까지 결과 화면 자료 + 그 뒤 직접 입력한 회차 (1회부터 빠짐없이 이어질 때만)
+const officialDraws = () => [...drawIdx.values()].sort((a, b) => a.round - b.round);
 const showGames = (games) => {
   $('games').innerHTML = games.map((g, i) => `<li><span class="tag">${TAGS[i]}</span><span class="balls">${g.map((n) => ball(n)).join('')}</span></li>`).join('');
 };
@@ -384,10 +386,10 @@ function renderStats() {
   if (!ok) {
     if (genMode === 'stat') {
       $('statTitle').textContent = '통계 추천';
-      $('statRule').textContent = '통계 추천은 1회부터 최신 회차까지 자동 수집 자료가 모두 있어야 만들 수 있어요. 지금은 자료가 부족해 무작위 탭을 이용해 주세요.';
+      $('statRule').textContent = '통계 추천은 1회부터 최신 회차까지 당첨번호가 빠짐없이 있어야 만들 수 있어요. 빠진 회차를 당첨번호 탭에서 입력하거나 무작위 탭을 이용해 주세요.';
       lastGames = []; $('games').innerHTML = ''; $('stat').textContent = '';
     }
-    $('numBody').innerHTML = '<p class="note">자동 수집 자료가 부족해 통계를 낼 수 없어요.</p>';
+    $('numBody').innerHTML = '<p class="note">당첨번호가 빠진 회차가 있어 통계를 낼 수 없어요.</p>';
     return;
   }
   const t = ds.length + 1;
@@ -397,7 +399,8 @@ function renderStats() {
     $('statRule').textContent = `규칙: 1~${t - 1}회 자료만 사용. 최근 ${STRATEGY.window}회차(${t - STRATEGY.window}~${t - 1}회)에 자주 나온 번호일수록 더 잘 뽑히게 했어요(가중치 = 1 + 나온 횟수). 같은 회차에는 항상 같은 번호가 나와요.`;
     if (statKey !== key || !lastGames.length) setGames(recommend(ds, t));
     else showGames(lastGames);
-    $('stat').textContent = `${STRATEGY.name} · 자동 수집 ${t - 1}회까지 반영`;
+    const userN = ds.filter(isUserDraw).length;
+    $('stat').textContent = `${STRATEGY.name} · ${t - 1}회까지 반영${userN ? ` (직접 입력 ${userN}회차 포함)` : ''}`;
   }
   if (statKey === key && $('numBody').childElementCount) return;
   statKey = key;
@@ -410,13 +413,29 @@ function renderStats() {
   const allTop = [...st].sort((a, b) => b.all - a.all || a.n - b.n).slice(0, 8);
   const pairs = topPairs(ds, t, 5);
   $('numBody').innerHTML = `
-    <p class="note">1~${t - 1}회 자동 수집 자료 기준. 과거에 많이 나왔다고 앞으로 더 잘 나오지는 않아요.</p>
+    <p class="note">1~${t - 1}회 당첨번호 기준. 과거에 많이 나왔다고 앞으로 더 잘 나오지는 않아요.</p>
     <h3>최근 ${STRATEGY.window}회차 출현 횟수</h3>
     <div class="heat">${st.map((x) => `<div><span class="ball r${band(x.n)} ${lv(x.recent)}">${x.n}</span>${x.recent}</div>`).join('')}</div>
     <h3>최근 ${STRATEGY.window}회차에 많이 나온 번호</h3><div class="chips">${hot.map((x) => chip(x, `${x.recent}번`)).join('')}</div>
     <h3>오래 안 나온 번호</h3><div class="chips">${cold.map((x) => chip(x, `${x.gap}회째`)).join('')}</div>
     <h3>역대 많이 나온 번호</h3><div class="chips">${allTop.map((x) => chip(x, `${x.all}번`)).join('')}</div>
     <h3>함께 많이 나온 번호쌍</h3><div class="chips">${pairs.map((p) => `<span>${ball(p.a)}${ball(p.b)}${p.count}번</span>`).join('')}</div>`;
+}
+
+/** 규칙을 정한 뒤 회차(1249회~)의 추천 성적: 앱 안에서 바로 계산 (직접 입력 회차 포함) */
+function afterRegHTML() {
+  const ds = officialDraws();
+  if (!(ds.length && ds.every((d, i) => d.round === i + 1))) return '';
+  const from = 1249, to = ds.length;
+  if (to < from) return '<p class="note">추천 규칙을 정한 뒤의 회차(1249회~) 성적은 당첨번호를 입력하면 여기에 따로 쌓여요.</p>';
+  let hit = 0; const best = [];
+  for (let t = from; t <= to; t++) {
+    const s = scoreGames(recommend(ds, t), ds[t - 1]);
+    hit += s.match[3] + s.match[4] + s.match[5] + s.match[6];
+    best.push(`${t}회 ${[6, 5, 4, 3].find((k) => s.match[k]) ? `최고 ${[6, 5, 4, 3].find((k) => s.match[k])}개 일치` : '3개 이상 일치 없음'}`);
+  }
+  const n = to - from + 1;
+  return `<p class="note"><b>규칙을 정한 뒤 성적 (${from}~${to}회, ${n}회차)</b>: 3개 이상 일치 ${hit}게임. 무작위로 샀다면 평균 ${(n * 10 * 0.02384).toFixed(1)}게임쯤 나와요. ${best.slice(-4).join(' · ')}</p>`;
 }
 
 /** 과거 검증 결과 표시 */
@@ -459,7 +478,7 @@ function renderBacktest() {
       </tbody>
     </table></div>
     <p class="verdict">3개 이상 일치는 통계 추천 ${h.strategy}게임, ${where}. ${inRange ? '무작위로 뽑았을 때 나올 수 있는 범위 안이에요.' : '무작위 범위를 벗어났어요. 다만 한 번의 결과라 우연일 수 있어요.'} 당첨금은 5개 일치 같은 드문 결과 한두 번에 크게 흔들려서 실력 비교에 쓰기 어려워요. 과거 결과가 앞으로의 결과를 보장하지 않아요.</p>
-    ${post ? `<p class="note">추천 규칙을 정한 뒤 새로 쌓인 ${post.from}~${post.to}회: 3개 이상 일치 ${post.compare.hit3plus.strategy}게임 (무작위 평균 ${post.compare.hit3plus.random.mean.toFixed(1)}게임)</p>` : '<p class="note">추천 규칙을 정한 뒤의 회차(1249회~) 결과는 매주 자동으로 여기에 따로 쌓여요.</p>'}`;
+    ${post ? `<p class="note">추천 규칙을 정한 뒤 새로 쌓인 ${post.from}~${post.to}회: 3개 이상 일치 ${post.compare.hit3plus.strategy}게임 (무작위 평균 ${post.compare.hit3plus.random.mean.toFixed(1)}게임)</p>` : ''}${afterRegHTML()}`;
 }
 
 $('toMy').addEventListener('click', () => {

@@ -179,3 +179,13 @@ test('실패 주입: 명령줄 실행도 종료 코드 1, 원본 그대로 (Acti
   assert.match(p.stderr, /수집 실패/);
   assert.equal(readFileSync(file, 'utf8'), before);
 });
+
+test('수집 중지: 허락 표시 없이 실제 실행하면 네트워크 요청 없이 종료 코드 1', () => {
+  const script = fileURLToPath(new URL('../tools/fetch_draws.mjs', import.meta.url));
+  const { file, before } = setup();
+  const env = { ...process.env, DADA_DRAWS_FILE: file }; delete env.DADA_FETCH_FIXTURE; delete env.ALLOW_DHLOTTERY_FETCH;
+  const p = spawnSync(process.execPath, [script, 'update'], { env, encoding: 'utf8' });
+  assert.equal(p.status, 1);
+  assert.match(p.stderr, /수집 중지됨/);
+  assert.equal(readFileSync(file, 'utf8'), before);
+});

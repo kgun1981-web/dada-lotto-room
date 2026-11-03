@@ -1,20 +1,15 @@
 name: update-draws
-# 동행복권 당첨번호 주간 갱신
-# - 일요일 03:17 KST(토 18:17 UTC) + 월요일 07:23 KST 보완 + 수동 실행
-# - 수집·검증·테스트 중 하나라도 실패하면 이후 단계(커밋·배포) 실행 안 됨 → 기존 파일 그대로
-# - 커밋 후 실제 배포 주소의 JSON을 다시 받아 회차 수·최신 회차가 같은지 확인 (다르면 실패로 표시 → 이메일 알림)
-# - 역대 전체 수집(history)은 2026-11-03 1회 완료. 수동 실행에서 mode=history를 직접 고를 때만 실행
+# [중지] 2026-11-04 동행복권 사이트 이용약관(2025.07.29 시행) 제12조 ①항 1호·9호
+#   "비정상적인 방법으로 서비스를 이용하거나 시스템에 접근하는 행위", "특정 기능을 반복적 또는 규칙적으로 호출하는 행위"
+#   에 해당할 수 있어 예약 실행과 자동 실행을 모두 끔. 1249회부터 당첨번호는 앱에서 직접 입력.
+#   동행복권의 명시적 허락(공식 API·제공 동의)을 받기 전까지 다시 켜지 않음.
+# 아래 수동 실행도 허락 없이는 쓰지 않음 (수집기에 ALLOW_DHLOTTERY_FETCH=yes 가 없으면 즉시 종료)
 on:
-  schedule:
-    - cron: '17 18 * * 6'
-    - cron: '23 22 * * 0'
   workflow_dispatch:
     inputs:
       mode:
-        description: 'update(기본) | history(역대 재수집, 특별한 경우만)'
+        description: '사용 중지됨. 동행복권 허락을 받은 경우에만'
         default: 'update'
-  push:
-    paths: ['.github/workflows/draws.yml']
 permissions:
   contents: write
 concurrency:
@@ -31,6 +26,8 @@ jobs:
           node-version: '22'
       - name: 당첨번호 수집 (실패 시 중단)
         run: node tools/fetch_draws.mjs "${{ github.event.inputs.mode || 'update' }}"
+        env:
+          ALLOW_DHLOTTERY_FETCH: 'no'
       - name: 통계 과거 검증 다시 계산
         run: node tools/backtest.mjs
       - name: 테스트 (실패 시 중단)
