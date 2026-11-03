@@ -23,3 +23,20 @@ test('공식 응답 변환: 번호 순서가 섞여 와도 정렬', () => {
   const d = toDraw({ ...SAMPLE, tm1WnNo: 42, tm6WnNo: 16 });
   assert.deepEqual(d.numbers, [16, 18, 27, 36, 38, 42]);
 });
+
+import { decideWrite } from '../tools/fetch_draws.mjs';
+const D = (round, status = 'official_verified') => ({ round, status });
+test('저장 판단: 0건이면 거부 (2026-11-03 실제 사고 재현)', () => {
+  assert.equal(decideWrite([D(1206, 'press_verified')], [], { history: true }).ok, false);
+});
+test('저장 판단: 회차 수·최신 회차가 줄면 거부', () => {
+  assert.equal(decideWrite([D(1), D(2), D(3)], [D(1), D(2)], { history: false }).ok, false);
+  assert.equal(decideWrite([D(5, 'press_verified')], [D(1), D(2), D(3), D(4)], { history: true }).ok, false);
+});
+test('저장 판단: 역대 수집은 1~최신 빠짐없어야', () => {
+  assert.equal(decideWrite([], [D(1), D(3)], { history: true }).ok, false);
+  assert.equal(decideWrite([], [D(1), D(2), D(3)], { history: true }).ok, true);
+});
+test('저장 판단: 주간 갱신으로 새 회차 추가는 허용', () => {
+  assert.equal(decideWrite([D(1), D(2)], [D(1), D(2), D(3)], { history: false }).ok, true);
+});
