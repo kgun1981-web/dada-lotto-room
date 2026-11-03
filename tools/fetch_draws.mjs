@@ -1,6 +1,6 @@
 // 동행복권 공식 당첨번호 수집기 (GitHub Actions에서 실행, Node 20+)
 // - 공식 결과 페이지가 쓰는 조회 주소(/lt645/selectPstLt645InfoNew.do, GET)만 사용
-// - 역대 전체(history): 최신부터 10회차씩 거슬러 올라감, 요청 간격 2초, 최대 200회 요청
+// - 역대 전체(history): 최신부터 10회차씩 거슬러 올라감, 요청 간격 2초, 최대 300회 요청
 // - 주간 갱신(update): 최신 묶음 1회 요청 → 새 회차만 추가
 // - 저장 전 앱과 같은 검증(loadDrawSet) 통과해야 파일을 바꿈. 실패 시 기존 파일 유지, 종료 코드 1
 // 사용: node tools/fetch_draws.mjs [history|update|auto]
@@ -13,7 +13,7 @@ const API = `${BASE}/lt645/selectPstLt645InfoNew.do`;
 const UA = 'Mozilla/5.0 (dada-lotto-room personal app; github.com/kgun1981-web/dada-lotto-room)';
 const FILE = new URL('../draws/lotto645.json', import.meta.url);
 const DELAY_MS = 2000;
-const MAX_REQUESTS = 200;
+const MAX_REQUESTS = 300; // 역대 1회 수집 약 210건 (요청당 6회차 내외)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let requests = 0;
 
