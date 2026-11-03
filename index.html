@@ -84,6 +84,11 @@
   .btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-size: 15px; padding: 12px; }
   .btn.danger { color: var(--warn); border-color: var(--warn); }
   .btn.small { padding: 6px 10px; font-size: 13px; }
+  .vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+  label.btn { display: inline-block; text-align: center; cursor: pointer; }
+  .qr-box { display: grid; gap: 8px; }
+  .qr-box video { width: 100%; max-height: 55vh; border-radius: 10px; background: #000; object-fit: cover; }
+  .qr-raw { font: 12px ui-monospace, monospace; word-break: break-all; user-select: all; }
   a.btn { display: inline-block; text-align: center; text-decoration: none; }
   .paste-item { display: grid; gap: 6px; padding: 10px; border-radius: 9px; background: var(--soft); }
   .paste-item label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
@@ -172,6 +177,13 @@
   <section class="panel" id="p-my" hidden>
     <form class="box" id="form" novalidate>
       <h2 id="formTitle">복권 등록</h2>
+      <div class="btns"><button class="btn" type="button" id="qrStart">QR 찍어서 불러오기</button><label class="btn" for="qrFile">사진에서 QR 읽기<input type="file" id="qrFile" class="vh" accept="image/*"></label></div>
+      <div class="qr-box" id="qrBox" hidden>
+        <video id="qrVideo" playsinline muted autoplay></video>
+        <p class="note">복권 QR을 화면 가운데에 맞춰 주세요. 밝은 곳에서 잘 읽혀요.</p>
+        <div class="btns"><button class="btn small" type="button" id="qrStop">닫기</button></div>
+      </div>
+      <div class="notice" id="qrMsg" hidden></div>
       <div class="notice" id="draftNote" hidden><span>생성기 추천 번호로 만든 초안이에요. 실제로 산 번호·회차와 같은지 확인한 뒤 저장하세요. 사지 않은 번호는 저장하지 마세요.</span></div>
       <label class="f" for="round">회차<input type="number" id="round" inputmode="numeric" min="1" step="1" placeholder="복권에 적힌 회차 (예: 1249)"></label>
       <div class="f"><span>번호 (게임당 6칸, 최대 5게임)</span>
@@ -258,7 +270,7 @@
     </div>
   </section>
 
-  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0646</span></footer>
+  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0753</span></footer>
 </div>
 
 <script type="module">
@@ -268,6 +280,7 @@ import { parseRowCells, parseRound, validateTicket, judgeTicket, needsBackupRemi
 import { validateUserDraw, mergeDraws, isUserDraw } from './lib/userdraws.js';
 import { parsePasted, saturdayOf } from './lib/paste.js';
 import { prizeFor, planPasteItem } from './lib/prize.js';
+import { parseTicketQr, QR_FORMAT_CONFIRMED } from './lib/qr.js';
 import { makeBackup, readBackup, validateSavedDraw } from './lib/backup.js';
 import { emptyDrafts, createDrafts, draftSaved, nextDraft, discardDrafts, canLoadNext } from './lib/drafts.js';
 import { recommend, numberStats, topPairs, STRATEGY, score as scoreGames } from './lib/stats.js';
@@ -371,6 +384,7 @@ function rebuildIndex() {
 // ---------- 탭 ----------
 const tabs = { gen: 'p-gen', my: 'p-my', draw: 'p-draw', backup: 'p-backup' };
 function show(name) {
+  if (name !== 'my') stopQr();
   for (const k in tabs) {
     $('tab-' + k).setAttribute('aria-selected', String(k === name));
     $(tabs[k]).hidden = k !== name;
@@ -578,6 +592,95 @@ $('rows').addEventListener('input', (ev) => {
     const next = all[all.indexOf(el) + 1];
     if (next) next.focus();
   }
+});
+
+// ---------- 복권 QR 읽기 (휴대폰 안에서만 처리, QR 주소는 열지 않음) ----------
+let qrStream = null; let qrTimer = null; let qrBusy = false;
+function loadJsQR() {
+  if (window.jsQR) return Promise.resolve(window.jsQR);
+  return new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'vendor/jsQR.js';
+    sc.onload = () => (window.jsQR ? res(window.jsQR) : rej(new Error('x')));
+    sc.onerror = () => rej(new Error('x'));
+    document.head.appendChild(sc);
+  });
+}
+function qrMessage(html, bad) {
+  $('qrMsg').innerHTML = html;
+  $('qrMsg').className = bad ? 'notice warn' : 'notice';
+  $('qrMsg').hidden = false;
+}
+function stopQr() {
+  clearInterval(qrTimer); qrTimer = null;
+  if (qrStream) qrStream.getTracks().forEach((t) => t.stop());
+  qrStream = null;
+  $('qrVideo').srcObject = null;
+  $('qrBox').hidden = true;
+}
+/** 그림(비디오·사진)에서 QR 글자 찾기. 큰 사진은 줄여서 읽음 */
+function decodeFrom(src, w, h, jsQR) {
+  const scale = Math.min(1, 1280 / Math.max(w, h));
+  const cw = Math.round(w * scale); const ch = Math.round(h * scale);
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(src, 0, 0, cw, ch);
+  const r = jsQR(cx.getImageData(0, 0, cw, ch).data, cw, ch, { inversionAttempts: 'dontInvert' });
+  return r ? r.data : null;
+}
+function useQrText(text) {
+  try {
+    const q = parseTicketQr(text);
+    drafts = discardDrafts(); clearForm();
+    $('round').value = q.round;
+    setRows(q.games);
+    renderForm();
+    const key = (gs) => gs.map((g) => g.join(',')).sort().join('|');
+    const dup = tickets.some((t) => t.round === q.round && key(t.games) === key(q.games));
+    qrMessage(`QR에서 <b>${q.round}회 ${q.games.length}게임</b>을 읽었어요. 복권과 같은지 확인한 뒤 저장하세요.` +
+      (dup ? '<br><b>이미 같은 복권이 저장돼 있어요.</b> 또 저장하면 두 장으로 기록돼요.' : '') +
+      (QR_FORMAT_CONFIRMED ? '' : '<br>QR 형식은 아직 실제 복권으로 확인 중이에요. 번호가 복권과 다르면 저장하지 말고 알려 주세요.'), false);
+  } catch (e) {
+    qrMessage(`${esc(e instanceof InputError ? e.message : 'QR을 읽지 못했어요')}. 입력칸은 바꾸지 않았어요.<br><span class="note">읽은 QR 글자:</span> <span class="qr-raw">${esc(String(text).slice(0, 300))}</span>`, true);
+  }
+}
+$('qrStart').addEventListener('click', async () => {
+  $('qrMsg').hidden = true;
+  if (!navigator.mediaDevices?.getUserMedia) { qrMessage('이 화면에서는 카메라를 쓸 수 없어요. "사진에서 QR 읽기"를 써 주세요.', true); return; }
+  let jsQR;
+  try { jsQR = await loadJsQR(); } catch { qrMessage('QR 판독기를 불러오지 못했어요. 인터넷에 연결된 상태에서 앱을 한 번 다시 열어 주세요.', true); return; }
+  try {
+    stopQr();
+    qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+    const v = $('qrVideo'); v.srcObject = qrStream; $('qrBox').hidden = false;
+    await v.play();
+    qrTimer = setInterval(() => {
+      if (qrBusy || !v.videoWidth) return;
+      qrBusy = true;
+      try {
+        const text = decodeFrom(v, v.videoWidth, v.videoHeight, jsQR);
+        if (text) { stopQr(); useQrText(text); }
+      } finally { qrBusy = false; }
+    }, 250);
+  } catch { stopQr(); qrMessage('카메라를 열지 못했어요. 설정에서 카메라 허용을 확인하거나 "사진에서 QR 읽기"를 써 주세요.', true); }
+});
+$('qrStop').addEventListener('click', stopQr);
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopQr(); });
+$('qrFile').addEventListener('change', async () => {
+  const f = $('qrFile').files[0]; $('qrFile').value = '';
+  if (!f) return;
+  $('qrMsg').hidden = true; stopQr();
+  let jsQR;
+  try { jsQR = await loadJsQR(); } catch { qrMessage('QR 판독기를 불러오지 못했어요. 인터넷에 연결된 상태에서 앱을 한 번 다시 열어 주세요.', true); return; }
+  const url = URL.createObjectURL(f);
+  try {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const text = decodeFrom(img, img.naturalWidth, img.naturalHeight, jsQR);
+    if (text) useQrText(text);
+    else qrMessage('사진에서 QR을 찾지 못했어요. QR이 크고 선명하게 나오게 다시 찍어 주세요.', true);
+  } catch { qrMessage('사진을 열지 못했어요.', true); }
+  finally { URL.revokeObjectURL(url); }
 });
 
 function clearForm() {

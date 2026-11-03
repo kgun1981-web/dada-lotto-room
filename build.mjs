@@ -39,7 +39,7 @@ writeFileSync('index.html', deploy.replace('__APP_VERSION__', APP_VERSION));
 
 // 미리보기: lib·draws 내장
 const strip = (f) => readFileSync(f, 'utf8').replace(/^import .*$/gm, '').replace(/^export /gm, '');
-const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/userdraws.js', 'lib/paste.js', 'lib/prize.js', 'lib/backup.js', 'lib/drafts.js', 'lib/stats.js', 'lib/store.js'];
+const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/userdraws.js', 'lib/paste.js', 'lib/prize.js', 'lib/qr.js', 'lib/backup.js', 'lib/drafts.js', 'lib/stats.js', 'lib/store.js'];
 const lib = LIBS.map(strip).join('\n');
 const draws = existsSync('draws/lotto645.json') ? readFileSync('draws/lotto645.json', 'utf8') : 'null';
 const preview = app.replace('__APP_VERSION__', '미리보기')
@@ -48,10 +48,10 @@ const preview = app.replace('__APP_VERSION__', '미리보기')
   .replace(/\/\*__BACKTEST__\*\/null\/\*__END_BACKTEST__\*\//, () => readFileSync('draws/backtest.json', 'utf8'));
 writeFileSync('preview.html', preview);
 // 서비스 워커: 앱 파일 내용 해시로 캐시 버전 자동 갱신
-const APP_FILES = ['./', './index.html', ...LIBS.map((f) => './' + f), './manifest.webmanifest',
+const APP_FILES = ['./', './index.html', ...LIBS.map((f) => './' + f), './vendor/jsQR.js', './manifest.webmanifest',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 const h = createHash('sha256');
-for (const f of ['index.html', ...LIBS, 'manifest.webmanifest', 'sw.template.js']) h.update(readFileSync(f));
+for (const f of ['index.html', ...LIBS, 'vendor/jsQR.js', 'manifest.webmanifest', 'sw.template.js']) h.update(readFileSync(f));
 const version = h.digest('hex').slice(0, 10);
 writeFileSync('sw.js', readFileSync('sw.template.js', 'utf8')
   .replace('__VERSION__', version).replace('__FILES__', JSON.stringify(APP_FILES)));

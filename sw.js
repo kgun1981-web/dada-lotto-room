@@ -3,9 +3,9 @@
 // - 쿼리 문자열은 무시하지 않음 (정확히 같은 주소만)
 // - draws/ 아래 당첨 데이터는 캐시하지 않음. 검증 후 정상 사본 저장은 앱이 직접 처리
 // - IndexedDB(구매 기록)는 건드리지 않음
-const VERSION = '02d13f97a5';
+const VERSION = '20e1091ba4';
 const CACHE = `dada-lotto-${VERSION}`;
-const FILES = ["./","./index.html","./lib/lotto.js","./lib/tickets.js","./lib/userdraws.js","./lib/paste.js","./lib/prize.js","./lib/backup.js","./lib/drafts.js","./lib/stats.js","./lib/store.js","./manifest.webmanifest","./icons/icon-180.png","./icons/icon-192.png","./icons/icon-512.png"];
+const FILES = ["./","./index.html","./lib/lotto.js","./lib/tickets.js","./lib/userdraws.js","./lib/paste.js","./lib/prize.js","./lib/qr.js","./lib/backup.js","./lib/drafts.js","./lib/stats.js","./lib/store.js","./vendor/jsQR.js","./manifest.webmanifest","./icons/icon-180.png","./icons/icon-192.png","./icons/icon-512.png"];
 const SCOPE = new URL(self.registration.scope);
 const MANAGED = new Set(FILES.map((f) => new URL(f, SCOPE).href));
 const DRAWS_PREFIX = new URL('draws/', SCOPE).pathname;
