@@ -2,10 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  parseGameText, parseRound, validateTicket, indexDraws, judgeTicket, makeBackup, readBackup,
+  parseGameText, parseRound, validateTicket, indexDraws, judgeTicket,
   loadDrawSet, isValidDate, parseRowCells, needsBackupReminder,
 } from '../lib/tickets.js';
 import { InputError } from '../lib/lotto.js';
+import { makeBackup, readBackup } from '../lib/backup.js';
 
 const FIX = [{ round: 1000, date: '2022-01-29', numbers: [1, 2, 3, 4, 5, 6], bonus: 7, status: 'press_verified' }];
 const idx = indexDraws(FIX);
@@ -100,7 +101,7 @@ test('백업: 같은 회차·번호라도 id가 다르면 따로 산 복권으�
   assert.equal(r.skipped, 0);
 });
 test('백업: 지원하지 않는 버전·버전 없음 거부', () => {
-  for (const v of [2, 0, '1', undefined]) {
+  for (const v of [3, 0, '1', undefined]) {
     const text = JSON.stringify({ kind: 'dada-lotto-backup', version: v, tickets: [] });
     assert.throws(() => readBackup(text), /버전/);
   }

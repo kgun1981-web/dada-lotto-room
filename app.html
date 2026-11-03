@@ -26,7 +26,7 @@
   h2 { font-size: 16px; margin: 0; }
   .status { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
   .status b { color: var(--fg); font-variant-numeric: tabular-nums; }
-  nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--soft); padding: 4px; border-radius: 11px; }
+  nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--soft); padding: 4px; border-radius: 11px; }
   nav button { appearance: none; border: 0; background: transparent; color: var(--muted); font: 600 14px var(--font); padding: 9px 4px; border-radius: 8px; cursor: pointer; }
   nav button[aria-selected="true"] { background: var(--paper); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
   .panel { display: grid; gap: 12px; }
@@ -34,7 +34,7 @@
   .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .note { margin: 0; font-size: 12.5px; color: var(--muted); }
   label.f { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
-  input[type=text], input[type=number], textarea { font: 16px var(--font); color: var(--fg); background: var(--bg);
+  input[type=text], input[type=number], input[type=date], textarea { font: 16px var(--font); color: var(--fg); background: var(--bg);
     border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; box-sizing: border-box; }
   textarea { min-height: 120px; resize: vertical; font-variant-numeric: tabular-nums; }
   .rows { display: grid; gap: 8px; }
@@ -42,6 +42,9 @@
   .grow .tag { flex: none; }
   .cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; flex: 1; min-width: 0; }
   .cells input { text-align: center; padding: 9px 0; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 0; }
+  .bonus-row { display: flex; align-items: center; gap: 8px; }
+  .bonus-row input { width: 64px; text-align: center; font-weight: 700; }
+  .draw-warn { font-size: 12.5px; color: var(--warn); font-weight: 600; margin: 0; }
   .grow .rm { flex: none; width: 34px; height: 38px; padding: 0; font-size: 16px; line-height: 1; }
   .toggle input { width: 46px; height: 26px; accent-color: var(--accent); }
   .btn { appearance: none; border: 1px solid var(--line); background: var(--paper); color: var(--fg); font: 600 14px var(--font);
@@ -79,12 +82,14 @@
     <h1>다다의 복권방</h1>
     <p class="status" id="status">당첨 데이터 불러오는 중…</p>
     <p class="status err" id="drawWarn" hidden></p>
-    <div class="notice" id="updateNote" hidden><span>새 버전이 준비됐어요. 입력 중인 내용을 저장한 뒤 적용하세요.</span><div class="btns"><button class="btn small" type="button" id="applyUpdate">새 버전 적용</button></div></div>
+    <div class="notice" id="updateNote" hidden><span>새 버전이 준비됐어요. 입력 중인 내용을 저장한 뒤 적용하세요.</span><div class="btns"><button class="btn small" type="button" id="applyUpdate">새 버전 적용</button></div>
+      <div class="confirm" id="applyConfirm" hidden><p class="err">저장하지 않은 입력은 사라집니다. 지금 적용할까요?</p><div class="btns"><button class="btn small danger" type="button" id="applyYes">적용</button><button class="btn small" type="button" id="applyNo">취소</button></div></div></div>
   </header>
 
   <nav role="tablist">
     <button role="tab" id="tab-gen" aria-selected="true">번호 생성</button>
     <button role="tab" id="tab-my" aria-selected="false">내 복권</button>
+    <button role="tab" id="tab-draw" aria-selected="false">당첨번호</button>
     <button role="tab" id="tab-backup" aria-selected="false">백업</button>
   </nav>
 
@@ -126,10 +131,38 @@
   </section>
 
   <!-- 백업 -->
+  <section class="panel" id="p-draw" hidden>
+    <div class="notice warn" id="conflicts" hidden></div>
+    <form class="box" id="drawForm" novalidate>
+      <h2 id="drawTitle">당첨번호 직접 등록</h2>
+      <p class="note">동행복권 공식 결과(앱·홈페이지·방송)를 보고 그대로 입력하세요. 직접 입력한 번호로 판정한 결과에는 "공식 결과와 대조 필요"가 함께 표시됩니다.</p>
+      <label class="f" for="dRound">회차<input type="number" id="dRound" inputmode="numeric" min="1" step="1" placeholder="공식 결과에 적힌 회차"></label>
+      <label class="f" for="dDate">추첨일<input type="date" id="dDate"></label>
+      <div class="f"><span>당첨번호 6개</span>
+        <div class="cells" id="drawCells">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" id="d0" aria-label="당첨번호 1">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" id="d1" aria-label="당첨번호 2">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" id="d2" aria-label="당첨번호 3">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" id="d3" aria-label="당첨번호 4">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" id="d4" aria-label="당첨번호 5">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" id="d5" aria-label="당첨번호 6">
+        </div>
+      </div>
+      <label class="f bonus-row" for="dBonus">보너스 번호 <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" id="dBonus"></label>
+      <p class="err" id="drawErr" hidden></p>
+      <div class="confirm" id="drawConfirm" hidden>
+        <p class="ok" id="drawConfirmText"></p>
+        <div class="btns"><button class="btn small primary" type="button" id="drawYes">이대로 저장</button><button class="btn small" type="button" id="drawNo">고치기</button></div>
+      </div>
+      <div class="btns"><button class="btn primary" type="submit" id="drawCheck">확인</button><button class="btn" type="button" id="drawCancel" hidden>수정 취소</button></div>
+    </form>
+    <div id="drawList" class="panel"></div>
+  </section>
+
   <section class="panel" id="p-backup" hidden>
     <div class="box">
       <h2>백업 만들기</h2>
-      <p class="note">저장된 복권을 백업 내용으로 만듭니다. 버튼을 누를 때만 만들어지고 어디로도 보내지 않습니다. 복사한 내용은 메모 앱 등에 직접 붙여넣어 보관하세요. 복사나 파일 저장 버튼을 누른 시각을 '마지막 백업 작업'으로 기록합니다(보관 완료를 뜻하지는 않아요).</p>
+      <p class="note">저장된 복권과 직접 입력한 당첨번호를 백업 내용으로 만듭니다. 버튼을 누를 때만 만들어지고 어디로도 보내지 않습니다. 복사한 내용은 메모 앱 등에 직접 붙여넣어 보관하세요. 복사나 파일 저장 버튼을 누른 시각을 '마지막 백업 작업'으로 기록합니다(보관 완료를 뜻하지는 않아요).</p>
       <p class="note" id="lastBk"></p>
       <div class="btns"><button class="btn" id="export" type="button">백업 만들기</button><button class="btn" id="copyBk" type="button" hidden>내용 복사</button></div>
       <p class="note" id="dlWrap" hidden><a id="dl" download="dada-lotto-backup.json" href="#">백업 파일 저장</a> (저장이 안 되면 위 '내용 복사'를 메모 앱에 붙여 두세요)</p>
@@ -158,10 +191,12 @@
 <script type="module">
 /*__LIB__*/
 import { generateGames, FILTERS, RANK_LABEL, InputError } from './lib/lotto.js';
-import { parseRowCells, parseRound, validateTicket, judgeTicket, makeBackup, readBackup, needsBackupReminder } from './lib/tickets.js';
+import { parseRowCells, parseRound, validateTicket, judgeTicket, needsBackupReminder } from './lib/tickets.js';
+import { validateUserDraw, mergeDraws, isUserDraw } from './lib/userdraws.js';
+import { makeBackup, readBackup } from './lib/backup.js';
 import { emptyDrafts, createDrafts, draftSaved, nextDraft, discardDrafts, canLoadNext } from './lib/drafts.js';
 import { chooseDrawData } from './lib/draws.js';
-import { store } from './lib/store.js';
+import { store, drawStore } from './lib/store.js';
 /*__END_LIB__*/
 const DRAWS_INLINE = /*__DRAWS__*/null/*__END_DRAWS__*/;
 
@@ -172,6 +207,12 @@ const ball = (n, dim) => `<span class="ball ${dim ? 'dim' : 'r' + band(n)}">${n}
 const TAGS = 'ABCDEFGHIJ';
 
 let drawIdx = new Map();
+let publicIdx = new Map();
+let publicMeta = { ok: false, lastChecked: '', fromCache: false };
+let userDraws = [];
+let conflicts = [];
+let drawEditRound = null;
+let pendingDraw = null;
 let latest = 0;
 let tickets = [];
 let lastGames = [];
@@ -196,15 +237,9 @@ async function loadDraws() {
   const pick = chooseDrawData({ freshText, cachedText: lsGet(LS_DRAWS) });
   if (pick.saveCache) lsSet(LS_DRAWS, freshText);
   const set = pick.set;
-  drawIdx = pick.data && set ? set.index : new Map();
-  latest = pick.data && set ? set.latest : 0;
-  if (pick.data) {
-    const official = drawIdx.size && [...drawIdx.values()].every((d) => d.status === 'official_verified');
-    $('status').innerHTML = `판정 가능 <b>${drawIdx.size}회차</b> · 검증된 마지막 회차 <b>${latest}회</b> · 데이터 확인일 ${esc(pick.data.lastChecked || '-')}` +
-      (official ? '' : ' · 공식 대조 전 데이터') + (pick.source === 'cache' ? ' · 저장된 사본' : '');
-  } else {
-    $('status').textContent = '당첨번호 확인 불가 · 저장된 복권은 볼 수 있어요';
-  }
+  publicIdx = pick.data && set ? set.index : new Map();
+  publicMeta = { ok: !!pick.data, lastChecked: pick.data?.lastChecked || '-', fromCache: pick.source === 'cache' };
+  rebuildIndex();
   const warns = [...pick.notices, ...((pick.data && set) ? set.warnings : [])];
   if (warns.length) {
     $('drawWarn').textContent = warns.slice(0, 3).join(' / ') + (warns.length > 3 ? ` 외 ${warns.length - 3}건` : '');
@@ -212,8 +247,24 @@ async function loadDraws() {
   }
 }
 
+/** 공개 데이터 + 직접 입력 합치기, 상단 상태줄 갱신 */
+function rebuildIndex() {
+  const m = mergeDraws(publicIdx, userDraws);
+  drawIdx = m.index;
+  conflicts = m.conflicts;
+  latest = drawIdx.size ? Math.max(...drawIdx.keys()) : 0;
+  const pubN = publicIdx.size;
+  const userN = [...drawIdx.values()].filter(isUserDraw).length;
+  const official = pubN && [...publicIdx.values()].every((d) => d.status === 'official_verified');
+  const pubPart = publicMeta.ok
+    ? `공개 데이터 <b>${pubN}회차</b>(확인일 ${esc(publicMeta.lastChecked)}${official ? '' : ' · 공식 대조 전'}${publicMeta.fromCache ? ' · 저장된 사본' : ''})`
+    : '공개 당첨번호 확인 불가';
+  $('status').innerHTML = `판정 가능 <b>${drawIdx.size}회차</b> · 마지막 <b>${latest || '-'}회</b> · ${pubPart}` +
+    (userN ? ` · 직접 입력 <b>${userN}회차</b>` : '');
+}
+
 // ---------- 탭 ----------
-const tabs = { gen: 'p-gen', my: 'p-my', backup: 'p-backup' };
+const tabs = { gen: 'p-gen', my: 'p-my', draw: 'p-draw', backup: 'p-backup' };
 function show(name) {
   for (const k in tabs) {
     $('tab-' + k).setAttribute('aria-selected', String(k === name));
@@ -355,8 +406,9 @@ function ticketHTML(t) {
     return `<li><span class="tag">${TAGS[i]}</span><span class="balls">${g.map((n) => ball(n, win && !(win.has(n) || (r?.rank === 2 && n === j.draw.bonus)))).join('')}</span>${label}</li>`;
   }).join('');
   const drawLine = j.status === 'judged'
-    ? `<div class="draw">당첨번호 ${j.draw.numbers.map((n) => ball(n)).join('')} + ${ball(j.draw.bonus)} <span>(${esc(j.draw.date)})</span></div>`
-    : `<p class="note">판정 불가: ${esc(j.reason)}</p>`;
+    ? `<div class="draw">당첨번호 ${j.draw.numbers.map((n) => ball(n)).join('')} + ${ball(j.draw.bonus)} <span>(${esc(j.draw.date)})</span></div>` +
+      (isUserDraw(j.draw) ? '<p class="draw-warn">직접 입력한 당첨번호 기준 · 공식 결과와 대조 필요</p>' : '')
+    : `<p class="note">판정 불가: ${esc(j.reason)} · 당첨번호 탭에서 직접 등록할 수 있어요</p>`;
   return `<div class="box" data-id="${t.id}">
     <div class="row"><h2>${t.round}회</h2><div class="btns"><button class="btn small" data-act="edit">수정</button><button class="btn small danger" data-act="del">삭제</button></div></div>
     ${drawLine}
@@ -367,13 +419,16 @@ function ticketHTML(t) {
 }
 
 async function refresh() {
-  try { tickets = await store.all(); storeOk = true; }
+  try { tickets = await store.all(); userDraws = await drawStore.all(); storeOk = true; }
   catch { tickets = []; storeOk = false; }
+  rebuildIndex();
+  renderDraws();
   $('storeErr').hidden = storeOk;
   $('importBtn').disabled = !storeOk;
   $('wipe').disabled = !storeOk;
   $('export').disabled = !storeOk;
   $('save').disabled = !storeOk;
+  $('drawCheck').disabled = !storeOk;
   if (!storeOk) { $('list').innerHTML = ''; $('backupNote').hidden = true; return; }
   $('list').innerHTML = tickets.length ? tickets.map(ticketHTML).join('')
     : '<div class="box empty">아직 등록한 복권이 없어요.<br>위에 회차와 번호를 넣고 저장하면 여기서 당첨 여부를 볼 수 있어요.</div>';
@@ -417,11 +472,133 @@ $('list').addEventListener('click', async (ev) => {
   }
 });
 
+// ---------- 당첨번호 직접 등록 ----------
+const dCells = () => [0, 1, 2, 3, 4, 5].map((k) => $('d' + k));
+function drawFormDirty() {
+  return $('dRound').value.trim() !== '' || $('dDate').value !== '' || $('dBonus').value !== '' || dCells().some((x) => x.value !== '');
+}
+function clearDrawForm() {
+  drawEditRound = null; pendingDraw = null;
+  $('dRound').value = ''; $('dDate').value = ''; $('dBonus').value = '';
+  dCells().forEach((x) => { x.value = ''; });
+  $('dRound').disabled = false;
+  $('drawErr').hidden = true; $('drawConfirm').hidden = true;
+  $('drawTitle').textContent = '당첨번호 직접 등록';
+  $('drawCancel').hidden = true;
+}
+function drawError(msg) { $('drawErr').textContent = msg; $('drawErr').hidden = false; $('drawConfirm').hidden = true; }
+
+$('drawCells').addEventListener('focusin', (ev) => { if (ev.target.tagName === 'INPUT') ev.target.select(); });
+$('dBonus').addEventListener('focus', () => $('dBonus').select());
+$('p-draw').addEventListener('input', (ev) => {
+  const el = ev.target;
+  if (!(el.id === 'dBonus' || /^d[0-5]$/.test(el.id))) return;
+  el.value = el.value.replace(/\D/g, '').slice(0, 2);
+  $('drawConfirm').hidden = true;
+  if (el.id !== 'dBonus' && (el.value.length === 2 || /^[5-9]$/.test(el.value))) {
+    const k = Number(el.id.slice(1));
+    (k < 5 ? $('d' + (k + 1)) : $('dBonus')).focus();
+  }
+});
+
+$('drawForm').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  try {
+    const cells = dCells().map((x) => x.value);
+    const numbers = parseRowCells(cells);
+    if (!numbers) throw new InputError('당첨번호 6개를 입력해 주세요');
+    const bv = $('dBonus').value.trim();
+    if (!/^\d{1,2}$/.test(bv)) throw new InputError('보너스 번호를 입력해 주세요');
+    const prev = drawEditRound != null ? userDraws.find((d) => d.round === drawEditRound) : null;
+    const d = validateUserDraw({ round: $('dRound').value, date: $('dDate').value, numbers, bonus: Number(bv), enteredAt: prev?.enteredAt, preferUser: prev?.preferUser });
+    const exists = userDraws.find((x) => x.round === d.round);
+    if (exists && drawEditRound !== d.round) throw new InputError(`${d.round}회는 이미 직접 등록돼 있어요. 아래 목록에서 수정해 주세요`);
+    const pub = publicIdx.get(d.round);
+    const pubNote = pub
+      ? (pub.numbers.join(',') === d.numbers.join(',') && pub.bonus === d.bonus && pub.date === d.date
+        ? ' 공개 데이터와 같습니다.'
+        : ' 공개 데이터와 다릅니다. 저장하면 어느 쪽으로 판정할지 고르게 됩니다.')
+      : '';
+    pendingDraw = d;
+    $('drawConfirmText').textContent = `${d.round}회 (${d.date}) · ${d.numbers.join(', ')} + 보너스 ${d.bonus}. 공식 결과와 같은지 한 번 더 확인해 주세요.${pubNote}`;
+    $('drawErr').hidden = true;
+    $('drawConfirm').hidden = false;
+  } catch (e) { drawError(e instanceof InputError ? e.message : '확인하지 못했습니다'); }
+});
+$('drawNo').addEventListener('click', () => { pendingDraw = null; $('drawConfirm').hidden = true; });
+$('drawYes').addEventListener('click', async () => {
+  if (!pendingDraw || !storeOk) return;
+  try {
+    await drawStore.put(pendingDraw);
+    clearDrawForm();
+    await refresh();
+  } catch { drawError('저장하지 못했습니다. 앱을 다시 열고 시도해 주세요.'); }
+});
+$('drawCancel').addEventListener('click', clearDrawForm);
+
+function renderDraws() {
+  // 충돌 안내
+  if (conflicts.length) {
+    $('conflicts').innerHTML = '<b>공개 데이터와 직접 입력이 다른 회차가 있어요.</b>' + conflicts.map((c) => `
+      <div class="confirm" data-conf="${c.round}">
+        <p class="note"><b>${c.round}회</b> · 공개(${esc(c.publicDraw.status)}): ${c.publicDraw.numbers.join(', ')} + ${c.publicDraw.bonus} (${esc(c.publicDraw.date)})<br>
+        직접 입력: ${c.userDraw.numbers.join(', ')} + ${c.userDraw.bonus} (${esc(c.userDraw.date)})<br>
+        지금 판정 기준: ${c.using === 'user' ? '직접 입력' : '공개 데이터'}</p>
+        <div class="btns"><button class="btn small" type="button" data-cact="usePublic">공개 데이터로 판정</button><button class="btn small" type="button" data-cact="useUser">내 입력으로 판정</button><button class="btn small danger" type="button" data-cact="dropUser">내 입력 지우기</button></div>
+      </div>`).join('');
+    $('conflicts').hidden = false;
+  } else $('conflicts').hidden = true;
+  // 목록
+  $('drawList').innerHTML = userDraws.length ? userDraws.map((d) => `
+    <div class="box" data-round="${d.round}">
+      <div class="row"><h2>${d.round}회 <span class="note">직접 입력</span></h2><div class="btns"><button class="btn small" type="button" data-dact="edit">수정</button><button class="btn small danger" type="button" data-dact="del">삭제</button></div></div>
+      <div class="draw">${d.numbers.map((n) => ball(n)).join('')} + ${ball(d.bonus)} <span>(${esc(d.date)})</span></div>
+      <div class="confirm" data-dconfirm hidden><p class="err">${d.round}회 직접 입력을 지울까요? 이 회차 복권은 판정 불가로 돌아갈 수 있어요.</p>
+        <div class="btns"><button class="btn small danger" type="button" data-dact="delYes">지우기</button><button class="btn small" type="button" data-dact="delNo">취소</button></div></div>
+    </div>`).join('')
+    : '<div class="box empty">직접 등록한 당첨번호가 없어요.<br>토요일 추첨이 끝나면 공식 결과를 보고 위에 입력하세요.</div>';
+}
+
+$('conflicts').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-cact]'); if (!b || !storeOk) return;
+  const round = Number(b.closest('[data-conf]').dataset.conf);
+  const d = userDraws.find((x) => x.round === round); if (!d) return;
+  try {
+    if (b.dataset.cact === 'dropUser') await drawStore.remove(round);
+    else await drawStore.put({ ...d, preferUser: b.dataset.cact === 'useUser' });
+    await refresh();
+  } catch { /* 다음 새로고침에서 다시 시도 */ }
+});
+$('drawList').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-dact]'); if (!b) return;
+  const card = b.closest('[data-round]');
+  const d = userDraws.find((x) => x.round === Number(card.dataset.round));
+  const box = card.querySelector('[data-dconfirm]');
+  switch (b.dataset.dact) {
+    case 'edit':
+      clearDrawForm();
+      drawEditRound = d.round;
+      $('dRound').value = d.round; $('dRound').disabled = true;
+      $('dDate').value = d.date; $('dBonus').value = d.bonus;
+      dCells().forEach((x, k) => { x.value = d.numbers[k]; });
+      $('drawTitle').textContent = `${d.round}회 직접 입력 수정`;
+      $('drawCancel').hidden = false;
+      $('drawForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      break;
+    case 'del': if (storeOk) box.hidden = false; break;
+    case 'delNo': box.hidden = true; break;
+    case 'delYes':
+      try { await drawStore.remove(d.round); if (drawEditRound === d.round) clearDrawForm(); await refresh(); }
+      catch { box.querySelector('.err').textContent = '삭제하지 못했습니다. 앱을 다시 열고 시도해 주세요.'; }
+      break;
+  }
+});
+
 // ---------- 백업 ----------
 let dlUrl = null;
 $('export').addEventListener('click', () => {
   if (!storeOk) return;
-  const text = makeBackup(tickets);
+  const text = makeBackup(tickets, userDraws);
   $('bkText').value = text; $('bkText').hidden = false; $('copyBk').hidden = false;
   if (dlUrl) URL.revokeObjectURL(dlUrl);
   dlUrl = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
@@ -441,11 +618,15 @@ $('importFile').addEventListener('change', async () => {
 $('importBtn').addEventListener('click', async () => {
   const msg = $('importMsg'); msg.hidden = false;
   try {
-    const r = readBackup($('importText').value, tickets);
+    const r = readBackup($('importText').value, tickets, userDraws);
     if (r.added.length) await store.putMany(r.added);
+    if (r.drawsAdded.length) await drawStore.putMany(r.drawsAdded);
     await refresh();
-    msg.className = 'ok';
-    msg.textContent = `${r.added.length}장 추가, 이미 있는 기록 ${r.skipped}장 건너뜀 (같은 번호라도 따로 저장한 복권은 모두 보존)` + (r.errors.length ? `, 오류 ${r.errors.length}장 (${r.errors.slice(0, 2).join(' / ')})` : '');
+    msg.className = r.drawConflicts.length ? 'err' : 'ok';
+    msg.textContent = `복권 ${r.added.length}장 추가, 이미 있는 기록 ${r.skipped}장 건너뜀 (같은 번호라도 따로 저장한 복권은 모두 보존)` +
+      ` · 직접 입력 당첨번호 ${r.drawsAdded.length}회차 추가, 같은 값 ${r.drawsSkipped}회차 건너뜀` +
+      (r.drawConflicts.length ? ` · ${r.drawConflicts.join(', ')}회는 이 휴대폰에 다른 값이 있어 덮어쓰지 않았어요` : '') +
+      (r.errors.length ? ` · 오류 ${r.errors.length}건 (${r.errors.slice(0, 2).join(' / ')})` : '');
   } catch (e) { msg.className = 'err'; msg.textContent = e.message; }
 });
 $('wipe').addEventListener('click', () => { $('wipeCount').textContent = tickets.length; $('wipeConfirm').hidden = false; });
@@ -470,13 +651,15 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   const hadController = !!navigator.serviceWorker.controller;
   let reloading = false;
   const formDirty = () => !!editingId || !!drafts.active || $('round').value.trim() !== '' ||
-    readRows().some((r) => r.some((v) => v !== ''));
+    readRows().some((r) => r.some((v) => v !== '')) || drawFormDirty();
   const reloadNow = () => { if (!reloading) { reloading = true; location.reload(); } };
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController) return; // 첫 설치는 새로고침 불필요
     if (formDirty()) $('updateNote').hidden = false; else reloadNow();
   });
-  $('applyUpdate').addEventListener('click', reloadNow);
+  $('applyUpdate').addEventListener('click', () => { if (formDirty()) $('applyConfirm').hidden = false; else reloadNow(); });
+  $('applyYes').addEventListener('click', reloadNow);
+  $('applyNo').addEventListener('click', () => { $('applyConfirm').hidden = true; });
   navigator.serviceWorker.register('./sw.js', { scope: './' }).then((reg) => {
     const check = () => reg.update().catch(() => {});
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });

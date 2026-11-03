@@ -182,8 +182,13 @@ with sync_playwright() as p:
             page.wait_for_timeout(3000)
             check('입력 중에는 자동 새로고침 안 함', len(loads) == 0 and page.input_value('#round') == '1300')
             check('입력 중에는 "새 버전 적용" 안내 표시', page.is_visible('#updateNote'))
+            page.tap('#applyUpdate')
+            check('입력 중 "새 버전 적용" → 확인 단계', page.is_visible('#applyConfirm') and len(loads) == 0)
+            page.tap('#applyNo')
+            check('확인 단계 취소 시 입력 유지', page.input_value('#round') == '1300' and len(loads) == 0)
+            page.tap('#applyUpdate')
             with page.expect_navigation(timeout=5000):
-                page.tap('#applyUpdate')
+                page.tap('#applyYes')
             page.wait_for_load_state('networkidle')
             check('"새 버전 적용" 누르면 새로고침', len(loads) >= 1 and page.input_value('#round') == '')
         finally:

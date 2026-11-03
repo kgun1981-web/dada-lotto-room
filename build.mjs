@@ -39,7 +39,7 @@ writeFileSync('index.html', deploy.replace('__APP_VERSION__', APP_VERSION));
 
 // 미리보기: lib·draws 내장
 const strip = (f) => readFileSync(f, 'utf8').replace(/^import .*$/gm, '').replace(/^export /gm, '');
-const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/drafts.js', 'lib/draws.js', 'lib/store.js'];
+const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/userdraws.js', 'lib/backup.js', 'lib/drafts.js', 'lib/draws.js', 'lib/store.js'];
 const lib = LIBS.map(strip).join('\n');
 const draws = readFileSync('draws/lotto645.json', 'utf8');
 const preview = app.replace('__APP_VERSION__', '미리보기')
