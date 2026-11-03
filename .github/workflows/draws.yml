@@ -1,7 +1,9 @@
 name: update-draws
-# 동행복권 공식 당첨번호 자동 수집
-# - 일요일 03:17 KST(토 18:17 UTC) + 월요일 07:23 KST 보완 실행 + 수동 실행
-# - 테스트·검증 통과 시에만 draws/lotto645.json 커밋 → GitHub Pages 자동 배포
+# 동행복권 당첨번호 주간 갱신
+# - 일요일 03:17 KST(토 18:17 UTC) + 월요일 07:23 KST 보완 + 수동 실행
+# - 수집·검증·테스트 중 하나라도 실패하면 이후 단계(커밋·배포) 실행 안 됨 → 기존 파일 그대로
+# - 커밋 후 실제 배포 주소의 JSON을 다시 받아 회차 수·최신 회차가 같은지 확인 (다르면 실패로 표시 → 이메일 알림)
+# - 역대 전체 수집(history)은 2026-11-03 1회 완료. 수동 실행에서 mode=history를 직접 고를 때만 실행
 on:
   schedule:
     - cron: '17 18 * * 6'
@@ -9,10 +11,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'auto | history | update'
-        default: 'auto'
+        description: 'update(기본) | history(역대 재수집, 특별한 경우만)'
+        default: 'update'
   push:
-    paths: ['tools/fetch_draws.mjs', '.github/workflows/draws.yml']
+    paths: ['.github/workflows/draws.yml']
 permissions:
   contents: write
 concurrency:
@@ -21,21 +23,37 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: 당첨번호 수집
-        run: node tools/fetch_draws.mjs "${{ github.event.inputs.mode || 'auto' }}"
-      - name: 테스트
+      - name: 당첨번호 수집 (실패 시 중단)
+        run: node tools/fetch_draws.mjs "${{ github.event.inputs.mode || 'update' }}"
+      - name: 통계 과거 검증 다시 계산
+        run: node tools/backtest.mjs
+      - name: 테스트 (실패 시 중단)
         run: node --test
       - name: 바뀐 경우에만 커밋
+        id: commit
         run: |
-          if git diff --quiet -- draws/lotto645.json; then echo "변경 없음"; exit 0; fi
+          if git diff --quiet -- draws/; then echo "변경 없음"; echo "changed=0" >> "$GITHUB_OUTPUT"; exit 0; fi
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add draws/lotto645.json
+          git add draws/
           git commit -m "당첨번호 자동 갱신 $(date -u +%F)"
           git push
+          echo "changed=1" >> "$GITHUB_OUTPUT"
+      - name: 실제 배포 주소에서 다시 확인
+        if: steps.commit.outputs.changed == '1'
+        run: |
+          WANT=$(node -e "const d=require('./draws/lotto645.json');console.log(d.count+' '+d.latest)")
+          URL="https://kgun1981-web.github.io/dada-lotto-room/draws/lotto645.json"
+          for i in $(seq 1 40); do
+            GOT=$(curl -fsS "$URL?check=$(date +%s)" | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{try{const d=JSON.parse(s);console.log(d.count+' '+d.latest)}catch{console.log('bad')}})" || echo "fail")
+            echo "기대 $WANT / 배포본 $GOT"
+            [ "$GOT" = "$WANT" ] && exit 0
+            sleep 15
+          done
+          echo "배포본 확인 실패: 10분 안에 배포 주소에 반영되지 않음"; exit 1
