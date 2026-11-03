@@ -6,6 +6,15 @@ from playwright.sync_api import sync_playwright
 
 BASE = sys.argv[1]
 results = []
+def fill_rows(page, games):
+    # 화면의 행 수를 맞춘 뒤 칸마다 입력
+    while page.locator('#rows .grow').count() < len(games):
+        page.tap('#addRow')
+    for i, g in enumerate(games):
+        for k in range(6):
+            page.fill(f'#c{i}_{k}', str(g[k]) if k < len(g) else '')
+def read_rows(page):
+    return [[page.input_value(f'#c{i}_{k}') for k in range(6)] for i in range(page.locator('#rows .grow').count())]
 def check(name, ok, detail=''):
     results.append((name, bool(ok), detail))
     print(('PASS' if ok else 'FAIL'), '-', name, ('· ' + detail) if detail else '')
@@ -31,6 +40,11 @@ with sync_playwright() as p:
     check('10게임 서로 다름', len({' '.join(g[1:]) for g in games}) == 10)
     w = page.evaluate('[document.documentElement.scrollWidth, window.innerWidth]')
     check('가로 스크롤 없음(아이폰 폭)', w[0] <= w[1], f'{w[0]} <= {w[1]}')
+    page.tap('#tab-my')
+    w2 = page.evaluate("[document.documentElement.scrollWidth, window.innerWidth, getComputedStyle(document.getElementById('c0_0')).inputMode || document.getElementById('c0_0').inputMode]")
+    check('내 복권 화면 가로 스크롤 없음', w2[0] <= w2[1], f'{w2[0]} <= {w2[1]}')
+    check('번호 칸은 숫자 키패드(inputmode=numeric)', page.get_attribute('#c0_0', 'inputmode') == 'numeric')
+    page.tap('#tab-gen')
 
     # 2. 서비스 워커
     page.wait_for_function('navigator.serviceWorker && navigator.serviceWorker.controller !== null || true')
@@ -58,8 +72,7 @@ with sync_playwright() as p:
     first5 = [li.inner_text().split()[1:] for li in page.locator('#games li').all()][:5]
     last5 = [li.inner_text().split()[1:] for li in page.locator('#games li').all()][5:]
     page.tap('#toMy')
-    nums = page.input_value('#nums').strip().split('\n')
-    check('초안 1장(A~E) 채워짐', [l.split() for l in nums] == first5)
+    check('초안 1장(A~E) 채워짐', read_rows(page) == first5, str(read_rows(page))[:80])
     check('초안 안내 문구 표시', page.is_visible('#draftNote'))
     check('저장 전 "다음 장" 버튼 숨김', not page.is_visible('#nextDraft'))
     page.fill('#round', '1249')
@@ -67,8 +80,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(300)
     check('1장 저장 후 "다음 장" 버튼 표시', page.is_visible('#nextDraft'))
     page.tap('#nextDraft')
-    nums2 = [l.split() for l in page.input_value('#nums').strip().split('\n')]
-    check('초안 2장(F~J) 채워짐', nums2 == last5)
+    check('초안 2장(F~J) 채워짐', read_rows(page) == last5)
     check('다음 장 회차 유지', page.input_value('#round') == '1249', page.input_value('#round'))
     page.tap('#save')
     page.wait_for_timeout(300)
@@ -78,12 +90,24 @@ with sync_playwright() as p:
     check('1249회는 판정 불가 표시', '판정 불가' in page.inner_text('#list'))
 
     # 6. 잘못된 입력 거부
-    for bad in ['-1 2 3 4 5 6', '1 2 3 4 5 5', '1 2 3 4 5 46', '1.0 2 3 4 5 6']:
-        page.fill('#round', '1209'); page.fill('#nums', bad); page.tap('#save'); page.wait_for_timeout(150)
-        check(f'잘못된 입력 거부: {bad}', page.is_visible('#formErr') and cards.count() == 2, page.inner_text('#formErr'))
+    for bad in [['1', '2', '3', '4', '5', '5'], ['1', '2', '3', '4', '5', '46'], ['1', '2', '', '4', '5', '6'], ['0', '2', '3', '4', '5', '6']]:
+        page.fill('#round', '1209'); fill_rows(page, [bad]); page.tap('#save'); page.wait_for_timeout(150)
+        check(f'잘못된 입력 거부: {" ".join(bad) or "빈칸"}', page.is_visible('#formErr') and cards.count() == 2, page.inner_text('#formErr'))
+    # 숫자 키패드처럼 실제 타이핑: 기호는 칸에 들어가지 않고, 두 자리·5~9 입력 시 다음 칸으로 이동
+    page.tap('#cancelEdit') if page.is_visible('#cancelEdit') else None
+    page.fill('#c0_0', ''); page.focus('#c0_0')
+    page.keyboard.type('-1')
+    check('칸에 기호 입력 안 됨', page.input_value('#c0_0') == '1', page.input_value('#c0_0'))
+    page.fill('#c0_0', ''); page.focus('#c0_0')
+    page.keyboard.type('217')
+    check('두 자리 입력 후 다음 칸 이동', page.input_value('#c0_0') == '21' and page.input_value('#c0_1') == '7', f"{page.input_value('#c0_0')}/{page.input_value('#c0_1')}")
+    page.fill('#c0_0', ''); page.fill('#c0_1', ''); page.focus('#c0_0')
+    page.keyboard.type('84')
+    check('5~9 한 자리 입력 후 다음 칸 이동', page.input_value('#c0_0') == '8' and page.input_value('#c0_1') == '4')
+    page.fill('#c0_0', ''); page.fill('#c0_1', '')
 
     # 7. 정상 회차 판정 (1209회 테스트 데이터)
-    page.fill('#round', '1209'); page.fill('#nums', '2 17 20 35 37 39\n2 17 20 35 37 24\n1 2 3 4 5 6'); page.tap('#save'); page.wait_for_timeout(300)
+    page.fill('#round', '1209'); fill_rows(page, [[2, 17, 20, 35, 37, 39], [2, 17, 20, 35, 37, 24], [1, 2, 3, 4, 5, 6]]); page.tap('#save'); page.wait_for_timeout(300)
     t1209 = page.locator('#list [data-id]').filter(has_text='1209회').first.inner_text()
     check('1209회: 1등·2등·낙첨 표시', '1등' in t1209 and '2등' in t1209 and '낙첨' in t1209, t1209.replace('\n', ' ')[:120])
 
@@ -96,6 +120,7 @@ with sync_playwright() as p:
     card = page.locator('#list [data-id]').filter(has_text='1209회').first
     card.locator('[data-act=edit]').tap()
     check('수정 모드 진입', page.inner_text('#formTitle') == '복권 수정')
+    check('수정 시 칸에 기존 번호 채워짐', read_rows(page)[0] == ['2', '17', '20', '35', '37', '39'], str(read_rows(page))[:60])
     page.tap('#cancelEdit')
     check('수정 취소', page.inner_text('#formTitle') == '복권 등록')
     card = page.locator('#list [data-id]').filter(has_text='1209회').first

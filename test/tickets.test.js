@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   parseGameText, parseRound, validateTicket, indexDraws, judgeTicket, makeBackup, readBackup,
-  loadDrawSet, isValidDate, needsBackupReminder,
+  loadDrawSet, isValidDate, parseRowCells, needsBackupReminder,
 } from '../lib/tickets.js';
 import { InputError } from '../lib/lotto.js';
 
@@ -186,3 +186,18 @@ test('무효 날짜 1건은 전체 거부가 아니라 그 회차만 제외, 다
   assert.equal(r.latest, 12);
   assert.equal(judgeTicket({ round: 12, games: [[7, 8, 9, 10, 11, 12]] }, r.index).results[0].rank, 1);
 });
+
+// ---- 번호 칸 6개 입력 ----
+test('칸 입력: 정상 6칸 → 정렬된 6개', () => {
+  assert.deepEqual(parseRowCells(['45', '3', ' 11 ', '25', '32', '40']), [3, 11, 25, 32, 40, 45]);
+});
+test('칸 입력: 6칸 모두 비면 빈 게임(null)', () => {
+  assert.equal(parseRowCells(['', '', ' ', '', '', '']), null);
+});
+for (const [label, cells] of [
+  ['일부 빈칸', ['1', '2', '', '4', '5', '6']], ['문자', ['1', '2', 'a', '4', '5', '6']], ['음수', ['-1', '2', '3', '4', '5', '6']],
+  ['소수', ['1.5', '2', '3', '4', '5', '6']], ['세자리', ['100', '2', '3', '4', '5', '6']], ['0', ['0', '2', '3', '4', '5', '6']],
+  ['46', ['46', '2', '3', '4', '5', '6']], ['중복', ['7', '7', '3', '4', '5', '6']], ['칸 수 오류', ['1', '2', '3']],
+]) {
+  test(`칸 입력 거부: ${label}`, () => assert.throws(() => parseRowCells(cells), InputError));
+}

@@ -37,6 +37,12 @@
   input[type=text], input[type=number], textarea { font: 16px var(--font); color: var(--fg); background: var(--bg);
     border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; box-sizing: border-box; }
   textarea { min-height: 120px; resize: vertical; font-variant-numeric: tabular-nums; }
+  .rows { display: grid; gap: 8px; }
+  .grow { display: flex; align-items: center; gap: 5px; }
+  .grow .tag { flex: none; }
+  .cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; flex: 1; min-width: 0; }
+  .cells input { text-align: center; padding: 9px 0; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 0; }
+  .grow .rm { flex: none; width: 34px; height: 38px; padding: 0; font-size: 16px; line-height: 1; }
   .toggle input { width: 46px; height: 26px; accent-color: var(--accent); }
   .btn { appearance: none; border: 1px solid var(--line); background: var(--paper); color: var(--fg); font: 600 14px var(--font);
     padding: 9px 12px; border-radius: 9px; cursor: pointer; }
@@ -104,7 +110,11 @@
       <h2 id="formTitle">복권 등록</h2>
       <div class="notice" id="draftNote" hidden><span>생성기 추천 번호로 만든 초안이에요. 실제로 산 번호·회차와 같은지 확인한 뒤 저장하세요. 사지 않은 번호는 저장하지 마세요.</span></div>
       <label class="f" for="round">회차<input type="number" id="round" inputmode="numeric" min="1" step="1" placeholder="복권에 적힌 회차 (예: 1249)"></label>
-      <label class="f" for="nums">번호 (한 줄에 1게임, 최대 5게임)<textarea id="nums" placeholder="3 11 25 32 40 44&#10;5 9 17 28 36 42"></textarea></label>
+      <div class="f"><span>번호 (게임당 6칸, 최대 5게임)</span>
+        <div class="rows" id="rows"></div>
+        <div class="btns"><button class="btn small" type="button" id="addRow">게임 추가</button></div>
+        <p class="note">두 자리를 입력하면 다음 칸으로 넘어가요. 한 자리 번호는 키보드 위 아래쪽 화살표나 다음 칸을 눌러 넘어가세요.</p>
+      </div>
       <p class="err" id="formErr" hidden></p>
       <div class="btns"><button class="btn primary" type="submit" id="save">저장</button><button class="btn" type="button" id="cancelEdit" hidden>수정 취소</button><button class="btn" type="button" id="nextDraft" hidden>다음 장(F~J) 초안 불러오기</button></div>
       <p class="note">구매한 번호는 이 휴대폰 안에만 저장됩니다. Safari 방문 기록·웹사이트 데이터를 지우면 함께 지워지니 가끔 백업해 두세요.</p>
@@ -147,7 +157,7 @@
 <script type="module">
 /*__LIB__*/
 import { generateGames, FILTERS, RANK_LABEL, InputError } from './lib/lotto.js';
-import { parseGameText, parseRound, validateTicket, judgeTicket, makeBackup, readBackup, needsBackupReminder } from './lib/tickets.js';
+import { parseRowCells, parseRound, validateTicket, judgeTicket, makeBackup, readBackup, needsBackupReminder } from './lib/tickets.js';
 import { emptyDrafts, createDrafts, draftSaved, nextDraft, discardDrafts, canLoadNext } from './lib/drafts.js';
 import { chooseDrawData } from './lib/draws.js';
 import { store } from './lib/store.js';
@@ -240,10 +250,57 @@ $('toMy').addEventListener('click', () => {
 });
 
 // ---------- 내 복권 ----------
+// ---------- 번호 칸 입력 ----------
+function rowHTML(i, g) {
+  const cells = Array.from({ length: 6 }, (_, k) =>
+    `<input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" aria-label="${TAGS[i]}게임 ${k + 1}번째 번호" id="c${i}_${k}" value="${g ? g[k] : ''}">`).join('');
+  return `<div class="grow" data-row="${i}"><span class="tag">${TAGS[i]}</span><div class="cells">${cells}</div>` +
+    `<button class="btn rm" type="button" data-rm="${i}" aria-label="${TAGS[i]}게임 지우기">×</button></div>`;
+}
+function setRows(games) {
+  const list = games && games.length ? games : [null];
+  $('rows').innerHTML = list.slice(0, 5).map((g, i) => rowHTML(i, g)).join('');
+  $('addRow').hidden = list.length >= 5;
+}
+function readRows() {
+  const out = [];
+  $('rows').querySelectorAll('.grow').forEach((row) => {
+    out.push([...row.querySelectorAll('input')].map((x) => x.value));
+  });
+  return out;
+}
+$('addRow').addEventListener('click', () => {
+  const cur = readRows();
+  if (cur.length >= 5) return;
+  setRows([...cur, null].map((c) => (c && c.some((v) => v !== '') ? c : null)));
+  const last = $('rows').querySelectorAll('.grow');
+  last[last.length - 1].querySelector('input').focus();
+});
+$('rows').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-rm]');
+  if (!b) return;
+  const cur = readRows();
+  cur.splice(Number(b.dataset.rm), 1);
+  setRows(cur.map((c) => (c.some((v) => v !== '') ? c : null)));
+});
+// 칸에 들어가면 기존 숫자를 선택해서 새로 누른 숫자로 바로 바뀌게 함
+$('rows').addEventListener('focusin', (ev) => { if (ev.target.tagName === 'INPUT') ev.target.select(); });
+$('rows').addEventListener('input', (ev) => {
+  const el = ev.target;
+  if (el.tagName !== 'INPUT') return;
+  el.value = el.value.replace(/\D/g, '').slice(0, 2);
+  // 두 자리 입력, 또는 5~9 한 자리(두 자리 번호가 될 수 없음) → 다음 칸
+  if (el.value.length === 2 || /^[5-9]$/.test(el.value)) {
+    const all = [...$('rows').querySelectorAll('input')];
+    const next = all[all.indexOf(el) + 1];
+    if (next) next.focus();
+  }
+});
+
 function clearForm() {
   editingId = null;
   $('round').value = '';
-  $('nums').value = '';
+  setRows([]);
   $('formErr').hidden = true;
 }
 /** 상태(editingId, drafts)에 맞춰 입력칸·버튼 표시 */
@@ -255,7 +312,7 @@ function renderForm() {
   $('cancelEdit').textContent = editingId ? '수정 취소' : '초안 버리기';
   $('draftNote').hidden = !draftActive;
   $('nextDraft').hidden = !canLoadNext(drafts);
-  if (draftActive) $('nums').value = drafts.active.map((g) => g.join(' ')).join('\n');
+  if (draftActive) setRows(drafts.active);
 }
 function formError(msg) { const e = $('formErr'); e.className = 'err'; e.textContent = msg; e.hidden = false; }
 
@@ -263,10 +320,14 @@ $('form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   try {
     const round = parseRound($('round').value);
-    const lines = $('nums').value.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (!lines.length) throw new InputError('번호를 한 줄 이상 입력해 주세요');
-    if (lines.length > 5) throw new InputError('한 장에는 5게임까지 입력할 수 있습니다');
-    const games = lines.map((l, i) => { try { return parseGameText(l); } catch (e) { throw new InputError(`${i + 1}번째 줄: ${e.message}`); } });
+    const rows = readRows();
+    const games = [];
+    rows.forEach((cells, i) => {
+      let g;
+      try { g = parseRowCells(cells); } catch (e) { throw new InputError(`${TAGS[i]}게임: ${e.message}`); }
+      if (g) games.push(g);
+    });
+    if (!games.length) throw new InputError('번호를 1게임 이상 입력해 주세요');
     const prev = editingId ? tickets.find((t) => t.id === editingId) : null;
     const t = validateTicket({ id: editingId || undefined, round, games, createdAt: prev?.createdAt });
     await store.put(t);
@@ -337,7 +398,7 @@ $('list').addEventListener('click', async (ev) => {
       clearForm();
       editingId = t.id;
       $('round').value = t.round;
-      $('nums').value = t.games.map((g) => g.join(' ')).join('\n');
+      setRows(t.games);
       renderForm();
       $('form').scrollIntoView({ behavior: 'smooth', block: 'start' });
       break;
