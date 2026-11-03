@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="다다의 복권방">
+<meta name="theme-color" content="#1f6b4f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>다다의 복권방</title>
+<style>
+  /* Layout: 한 열 도구. 상단 상태줄 + 탭 3개(번호 생성 / 내 복권 / 백업), 실제 로또 공 색 사용 */
+  :root {
+    --bg: #f3f5f2; --paper: #ffffff; --fg: #1d2420; --muted: #5d6862;
+    --line: #dde3df; --accent: #1f6b4f; --accent-fg: #ffffff; --soft: #e6efe9;
+    --warn: #b4441c; --ok: #1f6b4f;
+    --b1: #f2b705; --b2: #2f73d9; --b3: #e2483d; --b4: #8a8f93; --b5: #2fa35a; --ball-fg: #ffffff;
+    --font: "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #141917; --paper: #1d2421; --fg: #e7ece9; --muted: #9aa7a0; --line: #2d3632;
+    --accent: #4fb88c; --accent-fg: #0d1512; --soft: #233029; --warn: #f08a5d; --ok: #4fb88c; color-scheme: dark;
+  } }
+  :root[data-theme="dark"] {
+    --bg: #141917; --paper: #1d2421; --fg: #e7ece9; --muted: #9aa7a0; --line: #2d3632;
+    --accent: #4fb88c; --accent-fg: #0d1512; --soft: #233029; --warn: #f08a5d; --ok: #4fb88c; color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.55; }
+  .wrap { max-width: 540px; margin: 0 auto; padding-block: 16px 40px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 14px; }
+  h1 { font-size: 21px; margin: 0; }
+  h2 { font-size: 16px; margin: 0; }
+  .status { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+  .status b { color: var(--fg); font-variant-numeric: tabular-nums; }
+  nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--soft); padding: 4px; border-radius: 11px; }
+  nav button { appearance: none; border: 0; background: transparent; color: var(--muted); font: 600 14px var(--font); padding: 9px 4px; border-radius: 8px; cursor: pointer; }
+  nav button[aria-selected="true"] { background: var(--paper); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .panel { display: grid; gap: 12px; }
+  .box { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .note { margin: 0; font-size: 12.5px; color: var(--muted); }
+  label.f { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
+  input[type=text], input[type=number], textarea { font: 16px var(--font); color: var(--fg); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; box-sizing: border-box; }
+  textarea { min-height: 120px; resize: vertical; font-variant-numeric: tabular-nums; }
+  .toggle input { width: 46px; height: 26px; accent-color: var(--accent); }
+  .btn { appearance: none; border: 1px solid var(--line); background: var(--paper); color: var(--fg); font: 600 14px var(--font);
+    padding: 9px 12px; border-radius: 9px; cursor: pointer; }
+  .btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-size: 15px; padding: 12px; }
+  .btn.danger { color: var(--warn); border-color: var(--warn); }
+  .btn.small { padding: 6px 10px; font-size: 13px; }
+  .btn:focus-visible, nav button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  ol.games { list-style: none; margin: 0; padding: 0; }
+  ol.games li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+  ol.games li:first-child { border-top: 0; }
+  .tag { width: 20px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .balls { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; min-width: 0; }
+  .ball { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13.5px;
+    color: var(--ball-fg); font-variant-numeric: tabular-nums; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+  .r1 { background: var(--b1); } .r2 { background: var(--b2); } .r3 { background: var(--b3); } .r4 { background: var(--b4); } .r5 { background: var(--b5); }
+  .ball.dim { background: transparent; color: var(--muted); border: 1.5px solid var(--line); text-shadow: none; }
+  .rank { font-size: 12.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; background: var(--soft); color: var(--muted); }
+  .rank.win { background: var(--accent); color: var(--accent-fg); }
+  .err { color: var(--warn); font-weight: 600; font-size: 13.5px; margin: 0; }
+  .ok { color: var(--ok); font-weight: 600; font-size: 13.5px; margin: 0; }
+  .empty { text-align: center; color: var(--muted); padding: 18px 8px; }
+  .draw { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .draw .ball { width: 22px; height: 22px; font-size: 11px; }
+  .confirm { background: var(--soft); border-radius: 9px; padding: 10px; display: grid; gap: 8px; }
+  .notice { background: var(--soft); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: grid; gap: 8px; }
+  .notice.warn { color: var(--warn); }
+  footer { font-size: 12px; color: var(--muted); }
+  @media (max-width: 380px) { .ball { width: 28px; height: 28px; font-size: 12.5px; } }
+</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)} body{margin:0} img{max-width:100%}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>다다의 복권방</h1>
+    <p class="status" id="status">당첨 데이터 불러오는 중…</p>
+    <p class="status err" id="drawWarn" hidden></p>
+  </header>
+
+  <nav role="tablist">
+    <button role="tab" id="tab-gen" aria-selected="true">번호 생성</button>
+    <button role="tab" id="tab-my" aria-selected="false">내 복권</button>
+    <button role="tab" id="tab-backup" aria-selected="false">백업</button>
+  </nav>
+
+  <!-- 번호 생성 -->
+  <section class="panel" id="p-gen">
+    <div class="box">
+      <div class="row toggle">
+        <label for="filter"><b>패턴 회피 (실험)</b></label>
+        <input type="checkbox" id="filter" checked>
+      </div>
+      <p class="note">모든 유효한 로또 번호 조합의 1등 당첨 확률은 같습니다. '패턴 회피'는 일부 번호 모양을 제외해 조합을 만드는 실험적 옵션입니다. 공동 당첨자가 줄어든다는 보장은 없으며, 당첨 확률을 높여 주지도 않습니다.</p>
+      <p class="note" id="rules"></p>
+      <button class="btn primary" id="go" type="button">번호 새로 뽑기</button>
+    </div>
+    <div class="box">
+      <ol class="games" id="games" aria-live="polite"></ol>
+      <div class="row"><span class="note" id="stat"></span><button class="btn small" id="toMy" type="button">입력 초안 만들기 (2장)</button></div>
+    </div>
+  </section>
+
+  <!-- 내 복권 -->
+  <section class="panel" id="p-my" hidden>
+    <form class="box" id="form" novalidate>
+      <h2 id="formTitle">복권 등록</h2>
+      <div class="notice" id="draftNote" hidden><span>생성기 추천 번호로 만든 초안이에요. 실제로 산 번호·회차와 같은지 확인한 뒤 저장하세요. 사지 않은 번호는 저장하지 마세요.</span></div>
+      <label class="f" for="round">회차<input type="number" id="round" inputmode="numeric" min="1" step="1" placeholder="복권에 적힌 회차 (예: 1249)"></label>
+      <label class="f" for="nums">번호 (한 줄에 1게임, 최대 5게임)<textarea id="nums" placeholder="3 11 25 32 40 44&#10;5 9 17 28 36 42"></textarea></label>
+      <p class="err" id="formErr" hidden></p>
+      <div class="btns"><button class="btn primary" type="submit" id="save">저장</button><button class="btn" type="button" id="cancelEdit" hidden>수정 취소</button><button class="btn" type="button" id="nextDraft" hidden>다음 장(F~J) 초안 불러오기</button></div>
+      <p class="note">구매한 번호는 이 휴대폰 안에만 저장됩니다. Safari 방문 기록·웹사이트 데이터를 지우면 함께 지워지니 가끔 백업해 두세요.</p>
+    </form>
+    <div class="notice" id="backupNote" hidden><span id="backupNoteText"></span><div class="btns"><button class="btn small" type="button" id="goBackup">백업하러 가기</button></div></div>
+    <div class="notice warn" id="storeErr" hidden>저장된 기록을 읽지 못했습니다. 기록이 지워진 것이 아닐 수 있으니 앱을 다시 열어 주세요. 이 상태에서는 삭제·불러오기를 막아 두었습니다.</div>
+    <div id="list" class="panel"></div>
+  </section>
+
+  <!-- 백업 -->
+  <section class="panel" id="p-backup" hidden>
+    <div class="box">
+      <h2>백업 만들기</h2>
+      <p class="note">저장된 복권을 백업 내용으로 만듭니다. 버튼을 누를 때만 만들어지고 어디로도 보내지 않습니다. 복사한 내용은 메모 앱 등에 직접 붙여넣어 보관하세요. 복사나 파일 저장 버튼을 누른 시각을 '마지막 백업 작업'으로 기록합니다(보관 완료를 뜻하지는 않아요).</p>
+      <p class="note" id="lastBk"></p>
+      <div class="btns"><button class="btn" id="export" type="button">백업 만들기</button><button class="btn" id="copyBk" type="button" hidden>내용 복사</button></div>
+      <p class="note" id="dlWrap" hidden><a id="dl" download="dada-lotto-backup.json" href="#">백업 파일 저장</a> (저장이 안 되면 위 '내용 복사'를 메모 앱에 붙여 두세요)</p>
+      <textarea id="bkText" readonly hidden></textarea>
+    </div>
+    <div class="box">
+      <h2>백업 불러오기</h2>
+      <label class="f" for="importFile">백업 파일 선택<input type="file" id="importFile" accept=".json,application/json"></label>
+      <label class="f" for="importText">또는 백업 내용 붙여넣기<textarea id="importText" placeholder='{"kind":"dada-lotto-backup", …}'></textarea></label>
+      <button class="btn" id="importBtn" type="button">불러오기</button>
+      <p id="importMsg" class="note" hidden></p>
+    </div>
+    <div class="box">
+      <h2>전체 삭제</h2>
+      <button class="btn danger" id="wipe" type="button">저장된 복권 모두 지우기</button>
+      <div class="confirm" id="wipeConfirm" hidden>
+        <p class="err">저장된 복권 <span id="wipeCount">0</span>장이 모두 지워지고 되돌릴 수 없습니다.</p>
+        <div class="btns"><button class="btn danger" id="wipeYes" type="button">모두 지우기</button><button class="btn" id="wipeNo" type="button">취소</button></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.</footer>
+</div>
+
+<script type="module">
+/*__LIB__*/
+import { generateGames, FILTERS, RANK_LABEL, InputError } from './lib/lotto.js';
+import { parseGameText, parseRound, validateTicket, judgeTicket, makeBackup, readBackup, needsBackupReminder } from './lib/tickets.js';
+import { emptyDrafts, createDrafts, draftSaved, nextDraft, discardDrafts, canLoadNext } from './lib/drafts.js';
+import { chooseDrawData } from './lib/draws.js';
+import { store } from './lib/store.js';
+/*__END_LIB__*/
+const DRAWS_INLINE = /*__DRAWS__*/null/*__END_DRAWS__*/;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const band = (n) => (n <= 10 ? 1 : n <= 20 ? 2 : n <= 30 ? 3 : n <= 40 ? 4 : 5);
+const ball = (n, dim) => `<span class="ball ${dim ? 'dim' : 'r' + band(n)}">${n}</span>`;
+const TAGS = 'ABCDEFGHIJ';
+
+let drawIdx = new Map();
+let latest = 0;
+let tickets = [];
+let lastGames = [];
+let editingId = null;
+let drafts = emptyDrafts();
+let storeOk = true;
+const LS_BACKUP = 'dada-lotto-last-backup-action';
+const LS_DRAWS = 'dada-lotto-draws-good';
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* 저장 안 돼도 동작 */ } };
+
+// ---------- 당첨 데이터: 네트워크 우선, 실패·손상 시 마지막 정상 사본 ----------
+async function loadDraws() {
+  let freshText = null;
+  if (DRAWS_INLINE) freshText = JSON.stringify(DRAWS_INLINE);
+  else {
+    try {
+      const r = await fetch('./draws/lotto645.json', { cache: 'no-cache' });
+      if (r.ok) freshText = await r.text();
+    } catch { /* 오프라인 */ }
+  }
+  const pick = chooseDrawData({ freshText, cachedText: lsGet(LS_DRAWS) });
+  if (pick.saveCache) lsSet(LS_DRAWS, freshText);
+  const set = pick.set;
+  drawIdx = pick.data && set ? set.index : new Map();
+  latest = pick.data && set ? set.latest : 0;
+  if (pick.data) {
+    const official = drawIdx.size && [...drawIdx.values()].every((d) => d.status === 'official_verified');
+    $('status').innerHTML = `판정 가능 <b>${drawIdx.size}회차</b> · 검증된 마지막 회차 <b>${latest}회</b> · 데이터 확인일 ${esc(pick.data.lastChecked || '-')}` +
+      (official ? '' : ' · 공식 대조 전 데이터') + (pick.source === 'cache' ? ' · 저장된 사본' : '');
+  } else {
+    $('status').textContent = '당첨번호 확인 불가 · 저장된 복권은 볼 수 있어요';
+  }
+  const warns = [...pick.notices, ...((pick.data && set) ? set.warnings : [])];
+  if (warns.length) {
+    $('drawWarn').textContent = warns.slice(0, 3).join(' / ') + (warns.length > 3 ? ` 외 ${warns.length - 3}건` : '');
+    $('drawWarn').hidden = false;
+  }
+}
+
+// ---------- 탭 ----------
+const tabs = { gen: 'p-gen', my: 'p-my', backup: 'p-backup' };
+function show(name) {
+  for (const k in tabs) {
+    $('tab-' + k).setAttribute('aria-selected', String(k === name));
+    $(tabs[k]).hidden = k !== name;
+  }
+}
+for (const k in tabs) $('tab-' + k).addEventListener('click', () => show(k));
+
+// ---------- 번호 생성 ----------
+$('rules').textContent = '제외 규칙: ' + Object.values(FILTERS).map((f) => f.label).join(', ');
+function generate() {
+  const filter = $('filter').checked;
+  try {
+    const { games, stats } = generateGames({ count: 10, filter });
+    lastGames = games;
+    if (drafts.active || drafts.queue.length) { drafts = discardDrafts(); renderForm(); } // 새 번호 생성 시 이전 초안 폐기
+    $('games').innerHTML = games.map((g, i) => `<li><span class="tag">${TAGS[i]}</span><span class="balls">${g.map((n) => ball(n)).join('')}</span></li>`).join('');
+    const rej = Object.values(stats.rejected).reduce((a, b) => a + b, 0);
+    $('stat').textContent = filter ? `시도 ${stats.tries}회 · 필터 제외 ${rej}회` : `시도 ${stats.tries}회 · 필터 꺼짐`;
+  } catch (e) {
+    lastGames = []; // 실패 시 이전 번호로 초안이 만들어지지 않도록 비움
+    drafts = discardDrafts(); renderForm();
+    $('games').innerHTML = `<li class="err">${esc(e.message)}. 다시 눌러 주세요.</li>`;
+    $('stat').textContent = '';
+  }
+}
+$('go').addEventListener('click', generate);
+$('filter').addEventListener('change', generate);
+$('toMy').addEventListener('click', () => {
+  if (!lastGames.length) { show('gen'); return; }
+  clearForm();
+  drafts = createDrafts(lastGames); // 이전 초안은 버리고 새로 만듦
+  renderForm();
+  show('my');
+});
+
+// ---------- 내 복권 ----------
+function clearForm() {
+  editingId = null;
+  $('round').value = '';
+  $('nums').value = '';
+  $('formErr').hidden = true;
+}
+/** 상태(editingId, drafts)에 맞춰 입력칸·버튼 표시 */
+function renderForm() {
+  const draftActive = !!drafts.active;
+  $('formTitle').textContent = editingId ? '복권 수정' : draftActive ? `복권 등록 · 초안 ${drafts.sheet}/${drafts.total}장` : '복권 등록';
+  $('save').textContent = editingId ? '수정 저장' : '저장';
+  $('cancelEdit').hidden = !(editingId || draftActive);
+  $('cancelEdit').textContent = editingId ? '수정 취소' : '초안 버리기';
+  $('draftNote').hidden = !draftActive;
+  $('nextDraft').hidden = !canLoadNext(drafts);
+  if (draftActive) $('nums').value = drafts.active.map((g) => g.join(' ')).join('\n');
+}
+function formError(msg) { const e = $('formErr'); e.className = 'err'; e.textContent = msg; e.hidden = false; }
+
+$('form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  try {
+    const round = parseRound($('round').value);
+    const lines = $('nums').value.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) throw new InputError('번호를 한 줄 이상 입력해 주세요');
+    if (lines.length > 5) throw new InputError('한 장에는 5게임까지 입력할 수 있습니다');
+    const games = lines.map((l, i) => { try { return parseGameText(l); } catch (e) { throw new InputError(`${i + 1}번째 줄: ${e.message}`); } });
+    const prev = editingId ? tickets.find((t) => t.id === editingId) : null;
+    const t = validateTicket({ id: editingId || undefined, round, games, createdAt: prev?.createdAt });
+    await store.put(t);
+    // 저장 성공 후에만 초안 진행. 실패하면 catch로 가서 상태 그대로
+    if (drafts.active) drafts = draftSaved(drafts);
+    clearForm();
+    if (canLoadNext(drafts)) $('round').value = round; // 다음 장도 같은 회차일 가능성이 높음
+    renderForm();
+    await refresh();
+  } catch (e) {
+    formError(e instanceof InputError ? e.message : '저장하지 못했습니다. Safari 개인정보 보호 브라우징에서는 저장이 안 될 수 있어요.');
+  }
+});
+$('cancelEdit').addEventListener('click', () => { drafts = discardDrafts(); clearForm(); renderForm(); });
+$('nextDraft').addEventListener('click', () => { drafts = nextDraft(drafts); $('formErr').hidden = true; renderForm(); });
+$('goBackup').addEventListener('click', () => show('backup'));
+
+function ticketHTML(t) {
+  const j = judgeTicket(t, drawIdx);
+  const win = j.draw ? new Set(j.draw.numbers) : null;
+  const rows = t.games.map((g, i) => {
+    const r = j.results[i];
+    const label = j.status === 'judged' ? `<span class="rank ${r.rank ? 'win' : ''}">${RANK_LABEL[r.rank]}</span>` : '';
+    return `<li><span class="tag">${TAGS[i]}</span><span class="balls">${g.map((n) => ball(n, win && !(win.has(n) || (r?.rank === 2 && n === j.draw.bonus)))).join('')}</span>${label}</li>`;
+  }).join('');
+  const drawLine = j.status === 'judged'
+    ? `<div class="draw">당첨번호 ${j.draw.numbers.map((n) => ball(n)).join('')} + ${ball(j.draw.bonus)} <span>(${esc(j.draw.date)})</span></div>`
+    : `<p class="note">판정 불가: ${esc(j.reason)}</p>`;
+  return `<div class="box" data-id="${t.id}">
+    <div class="row"><h2>${t.round}회</h2><div class="btns"><button class="btn small" data-act="edit">수정</button><button class="btn small danger" data-act="del">삭제</button></div></div>
+    ${drawLine}
+    <ol class="games">${rows}</ol>
+    <div class="confirm" data-confirm hidden><p class="err">${t.round}회 복권을 지울까요? 되돌릴 수 없습니다.</p>
+      <div class="btns"><button class="btn small danger" data-act="delYes">지우기</button><button class="btn small" data-act="delNo">취소</button></div></div>
+  </div>`;
+}
+
+async function refresh() {
+  try { tickets = await store.all(); storeOk = true; }
+  catch { tickets = []; storeOk = false; }
+  $('storeErr').hidden = storeOk;
+  $('importBtn').disabled = !storeOk;
+  $('wipe').disabled = !storeOk;
+  $('export').disabled = !storeOk;
+  $('save').disabled = !storeOk;
+  if (!storeOk) { $('list').innerHTML = ''; $('backupNote').hidden = true; return; }
+  $('list').innerHTML = tickets.length ? tickets.map(ticketHTML).join('')
+    : '<div class="box empty">아직 등록한 복권이 없어요.<br>위에 회차와 번호를 넣고 저장하면 여기서 당첨 여부를 볼 수 있어요.</div>';
+  const last = lsGet(LS_BACKUP);
+  $('lastBk').textContent = last ? `마지막 백업 작업: ${new Date(last).toLocaleString('ko-KR')}` : '마지막 백업 작업: 없음';
+  if (needsBackupReminder(tickets.length, last)) {
+    $('backupNoteText').textContent = last
+      ? `마지막 백업 작업(${new Date(last).toLocaleDateString('ko-KR')}) 후 7일이 지났어요. 복사한 내용이나 파일이 잘 보관됐는지 확인해 주세요. 홈 화면에 추가해 써도 기록이 지워질 수 있어요.`
+      : '아직 백업 작업 기록이 없어요. 기록은 이 휴대폰에만 있어서 데이터 삭제 등으로 사라질 수 있으니 백업해 두세요.';
+    $('backupNote').hidden = false;
+  } else $('backupNote').hidden = true;
+}
+
+$('list').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-act]');
+  if (!btn) return;
+  const card = btn.closest('[data-id]');
+  const t = tickets.find((x) => x.id === card.dataset.id);
+  const box = card.querySelector('[data-confirm]');
+  switch (btn.dataset.act) {
+    case 'edit':
+      drafts = discardDrafts();
+      clearForm();
+      editingId = t.id;
+      $('round').value = t.round;
+      $('nums').value = t.games.map((g) => g.join(' ')).join('\n');
+      renderForm();
+      $('form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      break;
+    case 'del': if (storeOk) box.hidden = false; break;
+    case 'delNo': box.hidden = true; break;
+    case 'delYes':
+      try {
+        await store.remove(t.id);
+        if (editingId === t.id) { clearForm(); renderForm(); }
+        await refresh();
+      } catch {
+        box.querySelector('.err').textContent = '삭제하지 못했습니다. 앱을 다시 열고 시도해 주세요.';
+      }
+      break;
+  }
+});
+
+// ---------- 백업 ----------
+let dlUrl = null;
+$('export').addEventListener('click', () => {
+  if (!storeOk) return;
+  const text = makeBackup(tickets);
+  $('bkText').value = text; $('bkText').hidden = false; $('copyBk').hidden = false;
+  if (dlUrl) URL.revokeObjectURL(dlUrl);
+  dlUrl = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  $('dl').href = dlUrl;
+  $('dl').download = `dada-lotto-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  $('dlWrap').hidden = false;
+});
+$('copyBk').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('bkText').value); $('copyBk').textContent = '복사됨'; lsSet(LS_BACKUP, new Date().toISOString()); refresh(); }
+  catch { $('bkText').select(); $('copyBk').textContent = '선택됨, 복사하세요'; }
+});
+$('dl').addEventListener('click', () => { lsSet(LS_BACKUP, new Date().toISOString()); refresh(); });
+$('importFile').addEventListener('change', async () => {
+  const f = $('importFile').files[0];
+  if (f) $('importText').value = await f.text();
+});
+$('importBtn').addEventListener('click', async () => {
+  const msg = $('importMsg'); msg.hidden = false;
+  try {
+    const r = readBackup($('importText').value, tickets);
+    if (r.added.length) await store.putMany(r.added);
+    await refresh();
+    msg.className = 'ok';
+    msg.textContent = `${r.added.length}장 추가, 이미 있는 기록 ${r.skipped}장 건너뜀 (같은 번호라도 따로 저장한 복권은 모두 보존)` + (r.errors.length ? `, 오류 ${r.errors.length}장 (${r.errors.slice(0, 2).join(' / ')})` : '');
+  } catch (e) { msg.className = 'err'; msg.textContent = e.message; }
+});
+$('wipe').addEventListener('click', () => { $('wipeCount').textContent = tickets.length; $('wipeConfirm').hidden = false; });
+$('wipeNo').addEventListener('click', () => { $('wipeConfirm').hidden = true; });
+$('wipeYes').addEventListener('click', async () => {
+  if (!storeOk) return;
+  try { await store.clear(); $('wipeConfirm').hidden = true; await refresh(); }
+  catch { $('wipeConfirm').querySelector('.err').textContent = '지우지 못했습니다. 앱을 다시 열고 시도해 주세요.'; }
+});
+
+// ---------- 시작 ----------
+generate();
+await loadDraws();
+clearForm();
+renderForm();
+await refresh();
+
+// 홈 화면 앱(PWA): 배포 주소(HTTPS)에서만 등록, 저장소 하위 경로 기준 상대경로
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !DRAWS_INLINE) {
+  navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* 등록 실패해도 앱은 동작 */ });
+}
+</script>
+</body>
+</html>
