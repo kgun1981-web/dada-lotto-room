@@ -188,3 +188,12 @@
 
 ### 화면 문구
 "과거 당첨번호를 분석해 만든 통계 기반 추천입니다. 모든 번호 조합의 당첨 확률은 같으며, 이 추천이 당첨 가능성을 높인다는 근거는 없습니다. 과거 회차에서 시험한 결과와 무작위 추천 비교를 함께 보여드립니다."
+
+## 17. 수집 이용 조건 확인 기록 (2026-11-04 04:30 KST, GitHub Actions에서 확인)
+
+- 요청 URL: https://www.dhlottery.co.kr/robots.txt, https://www.dhlottery.co.kr/trms/home
+- User-Agent: `Mozilla/5.0 (compatible; dada-lotto-room/1.0; personal weekly check; +https://github.com/kgun1981-web/dada-lotto-room)`
+- robots.txt (HTTP 200): `User-agent: *` / `Disallow: /resources/` / `Disallow: /winImages/` → 사용 경로(`/lt645/result`, `/lt645/selectPstLt645InfoNew.do`) 금지 없음
+- 이용약관(`/trms/home`): 본문이 화면에서 스크립트로 불러와져 정적 요청으로는 조항을 읽지 못함 → **미확인**. 결과 페이지 하단에는 "게시된 이메일 주소 자동 수집 거부" 문구만 확인(일반 수집 금지 문구는 찾지 못함)
+- 공공데이터포털: 당첨번호 데이터셋 없음(판매점 현황·판매액 구조 CSV만)
+- 결론: 명시적 금지는 발견하지 못했으나 허용도 확인하지 못함. 매 실행 robots.txt 재확인, 403·429 즉시 중단 유지. 이용약관은 김동건이 휴대폰으로 열람해 자동 수집 관련 조항 확인 필요

@@ -63,8 +63,12 @@ test('저장 판단: 상태값 오류 거부', () => {
 const back = (d) => ({
   ltEpsd: d.round, ltRflYmd: d.date.replace(/-/g, ''), bnsWnNo: d.bonus,
   ...Object.fromEntries(d.numbers.map((n, i) => [`tm${i + 1}WnNo`, n])),
-  winType1: 1, winType2: 0, winType3: 0, wholEpsdSumNtslAmt: 1,
-  ...Object.fromEntries([1, 2, 3, 4, 5].flatMap((k) => [[`rnk${k}WnNope`, 1], [`rnk${k}WnAmt`, 1]])),
+  winType1: d.firstByType?.auto ?? 1, winType2: d.firstByType?.manual ?? 0, winType3: d.firstByType?.semi ?? 0,
+  wholEpsdSumNtslAmt: d.totalSales ?? 1,
+  ...Object.fromEntries([1, 2, 3, 4, 5].flatMap((k) => {
+    const r = d.ranks?.find((x) => x.rank === k);
+    return [[`rnk${k}WnNope`, r ? r.winners : 1], [`rnk${k}WnAmt`, r ? r.amount : 1]];
+  })),
 });
 const N1249 = { round: REAL_MAX + 1, date: '2026-11-07', numbers: [3, 11, 25, 32, 40, 44], bonus: 9 };
 const page = (latest) => `<select><option value="${latest}">${latest}</option><option value="${latest - 1}"></option></select>`;
@@ -102,6 +106,13 @@ test('정상: 새 회차 1개 추가, 임시 파일 없음', async () => {
   assert.equal(out.count, REAL.length + 1);
   assert.equal(out.latest, REAL_MAX + 1);
   assert.equal(existsSync(file + '.tmp'), false);
+});
+
+test('새 회차가 없으면 파일을 다시 쓰지 않음 (불필요한 커밋 방지)', async () => {
+  const { file, before } = setup();
+  const r = await run(opts(file, { ...NORMAL, page: { body: page(REAL_MAX) }, api: { body: listFor(REAL.slice(-6).reverse().map(back)) } }));
+  assert.equal(r.written, false);
+  assert.equal(readFileSync(file, 'utf8'), before);
 });
 
 const failures = [

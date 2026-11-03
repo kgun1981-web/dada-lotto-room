@@ -302,7 +302,7 @@ function rebuildIndex() {
   const staleDays = pubLatest ? Math.floor((Date.now() - Date.parse(pubLatest.date + 'T21:00:00+09:00')) / 86400000) : null;
   const stale = staleDays != null && staleDays >= 9; // 토요일 추첨 후 다음 주 월요일까지 갱신이 없으면
   const pubPart = publicMeta.ok
-    ? `동행복권 결과 화면 기준 <b>${pubN}회차</b>(확인일 ${esc(publicMeta.lastChecked)}${official ? '' : ' · 공식 대조 전'}${publicMeta.fromCache ? ' · 최신 확인 실패, 이전에 받은 자료 사용' : ''})`
+    ? `동행복권 결과 화면 기준 <b>${pubN}회차</b>(마지막 갱신 ${esc(publicMeta.lastChecked)}${official ? '' : ' · 공식 대조 전'}${publicMeta.fromCache ? ' · 최신 확인 실패, 이전에 받은 자료 사용' : ''})`
     : '자동 수집 당첨번호를 불러오지 못함';
   $('staleNote').hidden = !stale;
   if (stale) $('staleNote').textContent = `자동 수집이 늦어지고 있어요. 마지막 자동 수집 회차는 ${pubLatest.round}회(${pubLatest.date})예요. 그 뒤 회차는 당첨번호 탭에서 직접 입력할 수 있어요.`;

@@ -215,6 +215,10 @@ export async function run({
   // 5) 검증 → 임시 파일 → 재검증 → 교체
   const decision = decideWrite(existing, draws);
   if (!decision.ok) throw new StopError(`저장 안 함: ${decision.reason}`);
+  if (JSON.stringify(draws) === JSON.stringify(existing)) {
+    log(`새 회차 없음 (최신 ${decision.latest}회). 파일 그대로, 요청 ${requests}건`);
+    return { written: false, latest: decision.latest, added: 0, requests };
+  }
   const prevMax = existing.length ? Math.max(...existing.map((d) => d.round)) : 0;
   const n = now();
   const out = {

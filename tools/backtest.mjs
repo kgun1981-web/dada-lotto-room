@@ -18,13 +18,15 @@ const post = latest > PRE.to ? backtest(draws, { from: PRE.to + 1, to: latest, s
 const out = {
   strategy: { id: STRATEGY.id, name: STRATEGY.name, window: STRATEGY.window, games: STRATEGY.games, registered: 'DESIGN.md 16절, 2026-11-04 커밋 c5deff0' },
   dataLatest: latest,
-  generatedAt: new Date().toISOString(),
   preRegistered: pre,
   afterRegistration: post,
   next: { round: latest + 1, games: recommend(draws, latest + 1) },
 };
-writeFileSync(OUT + '.tmp', JSON.stringify(out) + '\n');
-renameSync(OUT + '.tmp', OUT);
+const text = JSON.stringify(out) + '\n';
+let same = false;
+try { same = readFileSync(OUT, 'utf8') === text; } catch { /* 처음 */ }
+if (!same) { writeFileSync(OUT + '.tmp', text); renameSync(OUT + '.tmp', OUT); }
+console.log(same ? '과거 검증 결과 변화 없음 (파일 그대로)' : '과거 검증 결과 저장');
 const c = pre.compare;
 const f = (k) => `${c[k].strategy} (무작위 ${c[k].random.min}~${c[k].random.max}, 평균 ${c[k].random.mean.toFixed(1)})`;
 console.log(`과거 검증 ${pre.from}~${pre.to}회 ${pre.rounds}회차, ${((Date.now() - started) / 1000).toFixed(1)}초`);

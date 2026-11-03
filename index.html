@@ -238,7 +238,7 @@
     </div>
   </section>
 
-  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0429</span></footer>
+  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0434</span></footer>
 </div>
 
 <script type="module">
@@ -315,7 +315,7 @@ function rebuildIndex() {
   const staleDays = pubLatest ? Math.floor((Date.now() - Date.parse(pubLatest.date + 'T21:00:00+09:00')) / 86400000) : null;
   const stale = staleDays != null && staleDays >= 9; // 토요일 추첨 후 다음 주 월요일까지 갱신이 없으면
   const pubPart = publicMeta.ok
-    ? `동행복권 결과 화면 기준 <b>${pubN}회차</b>(확인일 ${esc(publicMeta.lastChecked)}${official ? '' : ' · 공식 대조 전'}${publicMeta.fromCache ? ' · 최신 확인 실패, 이전에 받은 자료 사용' : ''})`
+    ? `동행복권 결과 화면 기준 <b>${pubN}회차</b>(마지막 갱신 ${esc(publicMeta.lastChecked)}${official ? '' : ' · 공식 대조 전'}${publicMeta.fromCache ? ' · 최신 확인 실패, 이전에 받은 자료 사용' : ''})`
     : '자동 수집 당첨번호를 불러오지 못함';
   $('staleNote').hidden = !stale;
   if (stale) $('staleNote').textContent = `자동 수집이 늦어지고 있어요. 마지막 자동 수집 회차는 ${pubLatest.round}회(${pubLatest.date})예요. 그 뒤 회차는 당첨번호 탭에서 직접 입력할 수 있어요.`;
