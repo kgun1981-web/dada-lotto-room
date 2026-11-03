@@ -73,6 +73,12 @@
   .btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-size: 15px; padding: 12px; }
   .btn.danger { color: var(--warn); border-color: var(--warn); }
   .btn.small { padding: 6px 10px; font-size: 13px; }
+  a.btn { display: inline-block; text-align: center; text-decoration: none; }
+  .paste-item { display: grid; gap: 6px; padding: 10px; border-radius: 9px; background: var(--soft); }
+  .paste-item label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+  .paste-item input[type=checkbox] { width: 20px; height: 20px; flex: none; margin-top: 2px; }
+  .prize-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .prize-table td { padding: 2px 4px; text-align: right; } .prize-table td:first-child { text-align: left; }
   .btn:focus-visible, nav button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .btns { display: flex; gap: 8px; flex-wrap: wrap; }
   ol.games { list-style: none; margin: 0; padding: 0; }
@@ -171,10 +177,22 @@
 
   <!-- 백업 -->
   <section class="panel" id="p-draw" hidden>
+    <div class="box" id="pasteBox">
+      <h2>공식 결과 붙여넣기</h2>
+      <p class="note" id="missingNote" hidden></p>
+      <p class="note">① 아래 버튼으로 동행복권 결과 화면을 열고 회차를 고르세요. ② 화면을 길게 눌러 전체 선택 → 복사. ③ 여기 붙여넣고 "읽기". 번호와 1~5등 당첨금을 함께 읽어요. 앱은 동행복권에 접속하지 않고, 붙여넣은 글만 읽어요.</p>
+      <div class="btns"><a class="btn" id="officialLink" href="https://www.dhlottery.co.kr/lt645/result" target="_blank" rel="noopener noreferrer">동행복권 당첨번호 보기</a></div>
+      <textarea id="pasteText" placeholder="복사한 결과 화면을 여기에 붙여넣기"></textarea>
+      <div class="btns"><button class="btn primary" type="button" id="pasteRead">읽기</button><button class="btn" type="button" id="pasteClear">지우기</button></div>
+      <p class="err" id="pasteErr" hidden></p>
+      <div id="pasteResult" class="panel"></div>
+      <div class="btns" id="pasteSaveRow" hidden><button class="btn primary" type="button" id="pasteSave">선택한 회차 저장</button></div>
+      <p class="ok" id="pasteMsg" hidden></p>
+    </div>
     <div class="notice warn" id="conflicts" hidden></div>
     <form class="box" id="drawForm" novalidate>
       <h2 id="drawTitle">당첨번호 직접 등록</h2>
-      <p class="note">1~1248회 당첨번호는 휴대폰 안에 보관한 자료를 써요(백업 탭에서 당첨번호 파일을 한 번 불러오면 돼요). 동행복권 이용약관(제12조, 특정 기능의 규칙적 호출 금지) 때문에 자동 수집은 하지 않아요. 1249회부터는 추첨 뒤 여기서 직접 입력해 주세요.</p>
+      <p class="note">붙여넣기가 안 될 때 쓰는 칸이에요. 1~1248회 당첨번호는 휴대폰 안에 보관한 자료를 써요(백업 탭에서 당첨번호 파일을 한 번 불러오면 돼요). 동행복권 이용약관(제12조, 특정 기능의 규칙적 호출 금지) 때문에 자동 수집은 하지 않아요. 1249회부터는 추첨 뒤 여기서 직접 입력해 주세요.</p>
       <p class="note">동행복권 공식 결과(앱·홈페이지·방송)를 보고 그대로 입력하세요. 직접 입력한 번호로 판정한 결과에는 "공식 결과와 대조 필요"가 함께 표시됩니다.</p>
       <label class="f" for="dRound">회차<input type="number" id="dRound" inputmode="numeric" min="1" step="1" placeholder="공식 결과에 적힌 회차"></label>
       <label class="f" for="dDate">추첨일<input type="date" id="dDate"></label>
@@ -234,6 +252,8 @@
 import { generateGames, FILTERS, RANK_LABEL, InputError } from './lib/lotto.js';
 import { parseRowCells, parseRound, validateTicket, judgeTicket, needsBackupReminder, loadDrawSet } from './lib/tickets.js';
 import { validateUserDraw, mergeDraws, isUserDraw } from './lib/userdraws.js';
+import { parsePasted, saturdayOf } from './lib/paste.js';
+import { prizeFor, planPasteItem } from './lib/prize.js';
 import { makeBackup, readBackup, validateSavedDraw } from './lib/backup.js';
 import { emptyDrafts, createDrafts, draftSaved, nextDraft, discardDrafts, canLoadNext } from './lib/drafts.js';
 import { recommend, numberStats, topPairs, STRATEGY, score as scoreGames } from './lib/stats.js';
@@ -297,6 +317,17 @@ async function loadDraws() {
   if (set.warnings.length) $('drawWarn').textContent = '당첨번호 자료 경고: ' + set.warnings.slice(0, 3).join(' / ');
 }
 
+/** 마지막 회차 뒤로 추첨(토요일 21시 기준)이 끝났는데 앱에 없는 회차 */
+function missingRounds() {
+  if (!latest) return [];
+  const out = [];
+  for (let n = latest + 1; out.length < 52; n++) {
+    if (Date.parse(saturdayOf(n) + 'T21:00:00+09:00') > Date.now()) break;
+    if (!drawIdx.has(n)) out.push(n);
+  }
+  return out;
+}
+
 /** 공개 데이터 + 직접 입력 합치기, 상단 상태줄 갱신 */
 function rebuildIndex() {
   const m = mergeDraws(publicIdx, userDraws);
@@ -312,6 +343,9 @@ function rebuildIndex() {
   const pubPart = publicMeta.ok
     ? `휴대폰에 보관한 당첨번호 <b>${pubN}회차</b>${official ? '' : ' · 공식 대조 전'}`
     : '당첨번호 자료가 없어요 · 백업 탭에서 당첨번호 파일을 불러와 주세요';
+  const miss = missingRounds();
+  $('missingNote').hidden = !miss.length;
+  if (miss.length) $('missingNote').innerHTML = `<b>빠진 회차: ${miss.length === 1 ? miss[0] + '회' : `${miss[0]}~${miss[miss.length - 1]}회 (${miss.length}회)`}</b> · 결과 화면에서 ${miss[0]}회부터 한 회차씩 골라 복사해 주세요.`;
   $('staleNote').hidden = !stale;
   if (stale) $('staleNote').textContent = `${latest + 1}회 당첨번호를 직접 입력해 주세요. 앱에 있는 마지막 회차는 ${latest}회(${knownLatest.date})예요. 당첨번호 탭에서 입력할 수 있어요.`;
   $('status').innerHTML = `판정 가능 <b>${drawIdx.size}회차</b> · 마지막 <b>${latest || '-'}회</b> · ${pubPart}` +
@@ -583,9 +617,19 @@ $('goBackup').addEventListener('click', () => show('backup'));
 function ticketHTML(t) {
   const j = judgeTicket(t, drawIdx);
   const win = j.draw ? new Set(j.draw.numbers) : null;
+  // 당첨금 표: 같은 회차·같은 번호로 붙여넣어 둔 것만 사용
+  const ud = j.draw ? userDraws.find((x) => x.round === t.round) : null;
+  const ranks = ud?.ranks && ud.bonus === j.draw.bonus && ud.numbers.join(',') === j.draw.numbers.join(',') ? ud.ranks : null;
+  let unknown = false;
   const rows = t.games.map((g, i) => {
     const r = j.results[i];
-    const label = j.status === 'judged' ? `<span class="rank ${r.rank ? 'win' : ''}">${RANK_LABEL[r.rank]}</span>` : '';
+    let label = '';
+    if (j.status === 'judged') {
+      const p = prizeFor(r.rank, ranks);
+      const amt = r.rank ? (p.amount != null ? ` · ${p.amount.toLocaleString('ko-KR')}원` : ' · 금액 확인 필요') : '';
+      if (r.rank && p.amount == null) unknown = true;
+      label = `<span class="rank ${r.rank ? 'win' : ''}">${RANK_LABEL[r.rank]}${amt}</span>`;
+    }
     return `<li><span class="tag">${TAGS[i]}</span><span class="balls">${g.map((n) => ball(n, win && !(win.has(n) || (r?.rank === 2 && n === j.draw.bonus)))).join('')}</span>${label}</li>`;
   }).join('');
   const drawLine = j.status === 'judged'
@@ -596,6 +640,7 @@ function ticketHTML(t) {
     <div class="row"><h2>${t.round}회</h2><div class="btns"><button class="btn small" data-act="edit">수정</button><button class="btn small danger" data-act="del">삭제</button></div></div>
     ${drawLine}
     <ol class="games">${rows}</ol>
+    ${unknown ? '<p class="note">1~3등 금액은 회차마다 달라요. 당첨번호 탭에서 이 회차 결과 화면을 붙여넣으면 금액이 표시돼요(최종 금액은 동행복권에서 확인).</p>' : ''}
     <div class="confirm" data-confirm hidden><p class="err">${t.round}회 복권을 지울까요? 되돌릴 수 없습니다.</p>
       <div class="btns"><button class="btn small danger" data-act="delYes">지우기</button><button class="btn small" data-act="delNo">취소</button></div></div>
   </div>`;
@@ -719,6 +764,63 @@ $('drawYes').addEventListener('click', async () => {
 });
 $('drawCancel').addEventListener('click', clearDrawForm);
 
+// ---------- 공식 결과 붙여넣기 ----------
+let pastePlans = [];
+const won = (n) => n.toLocaleString('ko-KR') + '원';
+const prizeTable = (ranks) => `<table class="prize-table"><tr><td>등위</td><td>당첨 게임 수</td><td>1게임당</td></tr>${ranks.map((r) => `<tr><td>${r.rank}등</td><td>${r.winners.toLocaleString('ko-KR')}</td><td>${won(r.amount)}</td></tr>`).join('')}</table>`;
+const drawText = (d) => `${d.numbers.join(', ')} + 보너스 ${d.bonus}`;
+
+function renderPaste() {
+  $('pasteResult').innerHTML = pastePlans.map((p, i) => {
+    const it = p.item;
+    const head = `<b>${it.round ? it.round + '회' : '회차 모름'}</b> ${it.round && p.draw ? `(${esc(p.draw.date)}${p.dateGuessed ? ', 회차로 계산한 날짜' : ''})` : ''}`;
+    const nums = `<div class="draw">${(it.numbers || []).map((n) => ball(n)).join('')}${it.bonus != null ? ' + ' + ball(it.bonus) : ''}</div>`;
+    const note = it.note ? `<p class="note">${esc(it.note)}</p>` : '';
+    const table = it.ranks ? prizeTable(it.ranks) : '';
+    switch (p.kind) {
+      case 'new': case 'addPrize':
+        return `<div class="paste-item"><label><input type="checkbox" data-pi="${i}" checked><span>${head} · ${p.kind === 'new' ? '새로 저장' : '번호는 이미 있어요 · 당첨금 표만 저장'}</span></label>${nums}${table}${note}</div>`;
+      case 'same':
+        return `<div class="paste-item"><span>${head} · 이미 앱에 같은 내용이 있어요</span>${nums}${note}</div>`;
+      case 'conflict':
+        return `<div class="paste-item"><p class="err">${head} · 앱에 있는 번호(${esc(p.otherLabel)}: ${drawText(p.other)})와 달라요. 저장하지 않았어요. 결과 화면의 회차를 다시 확인해 주세요.</p>${nums}</div>`;
+      default:
+        return `<div class="paste-item"><p class="err">${head} · ${esc(p.reason)}</p>${nums}${note}<div class="btns"><button class="btn small" type="button" data-fill="${i}">아래 입력칸에 채워서 확인</button></div></div>`;
+    }
+  }).join('');
+  $('pasteSaveRow').hidden = !pastePlans.some((p) => p.kind === 'new' || p.kind === 'addPrize');
+}
+$('pasteRead').addEventListener('click', () => {
+  $('pasteErr').hidden = true; $('pasteMsg').hidden = true;
+  const r = parsePasted($('pasteText').value);
+  if (!r.items.length) { pastePlans = []; renderPaste(); $('pasteErr').textContent = r.warning || '당첨번호를 찾지 못했어요'; $('pasteErr').hidden = false; return; }
+  pastePlans = r.items.map((item) => ({ item, ...planPasteItem(item, publicIdx, userDraws) }));
+  renderPaste();
+});
+$('pasteClear').addEventListener('click', () => { $('pasteText').value = ''; pastePlans = []; renderPaste(); $('pasteErr').hidden = true; $('pasteMsg').hidden = true; });
+$('pasteResult').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-fill]'); if (!b) return;
+  const f = pastePlans[Number(b.dataset.fill)].form;
+  clearDrawForm();
+  $('dRound').value = f.round; $('dDate').value = f.date; $('dBonus').value = f.bonus;
+  dCells().forEach((x, k) => { x.value = f.numbers[k] ?? ''; });
+  $('drawForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+$('pasteSave').addEventListener('click', async () => {
+  if (!storeOk) return;
+  const picks = [...$('pasteResult').querySelectorAll('input[data-pi]:checked')].map((x) => pastePlans[Number(x.dataset.pi)]);
+  if (!picks.length) { $('pasteErr').textContent = '저장할 회차를 골라 주세요'; $('pasteErr').hidden = false; return; }
+  try {
+    // 저장 직전 최신 상태로 다시 판단 (그 사이 다른 입력이 생겼을 수 있음)
+    const fresh = picks.map((p) => planPasteItem(p.item, publicIdx, userDraws)).filter((p) => p.kind === 'new' || p.kind === 'addPrize');
+    await drawStore.putMany(fresh.map((p) => p.draw));
+    $('pasteText').value = ''; pastePlans = []; renderPaste();
+    await refresh();
+    $('pasteMsg').textContent = `${fresh.map((p) => p.round + '회').join(', ')} 저장했어요.`;
+    $('pasteMsg').hidden = false;
+  } catch { $('pasteErr').textContent = '저장하지 못했습니다. 앱을 다시 열고 시도해 주세요.'; $('pasteErr').hidden = false; }
+});
+
 function renderDraws() {
   // 충돌 안내
   if (conflicts.length) {
@@ -734,8 +836,9 @@ function renderDraws() {
   // 목록
   $('drawList').innerHTML = userDraws.length ? userDraws.map((d) => `
     <div class="box" data-round="${d.round}">
-      <div class="row"><h2>${d.round}회 <span class="note">직접 입력</span></h2><div class="btns"><button class="btn small" type="button" data-dact="edit">수정</button><button class="btn small danger" type="button" data-dact="del">삭제</button></div></div>
+      <div class="row"><h2>${d.round}회 <span class="note">직접 입력${d.ranks ? ' · 당첨금 표 있음' : ''}</span></h2><div class="btns"><button class="btn small" type="button" data-dact="edit">수정</button><button class="btn small danger" type="button" data-dact="del">삭제</button></div></div>
       <div class="draw">${d.numbers.map((n) => ball(n)).join('')} + ${ball(d.bonus)} <span>(${esc(d.date)})</span></div>
+      ${d.ranks ? prizeTable(d.ranks) : ''}
       <div class="confirm" data-dconfirm hidden><p class="err">${d.round}회 직접 입력을 지울까요? 이 회차 복권은 판정 불가로 돌아갈 수 있어요.</p>
         <div class="btns"><button class="btn small danger" type="button" data-dact="delYes">지우기</button><button class="btn small" type="button" data-dact="delNo">취소</button></div></div>
     </div>`).join('')

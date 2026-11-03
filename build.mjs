@@ -39,7 +39,7 @@ writeFileSync('index.html', deploy.replace('__APP_VERSION__', APP_VERSION));
 
 // 미리보기: lib·draws 내장
 const strip = (f) => readFileSync(f, 'utf8').replace(/^import .*$/gm, '').replace(/^export /gm, '');
-const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/userdraws.js', 'lib/backup.js', 'lib/drafts.js', 'lib/stats.js', 'lib/store.js'];
+const LIBS = ['lib/lotto.js', 'lib/tickets.js', 'lib/userdraws.js', 'lib/paste.js', 'lib/prize.js', 'lib/backup.js', 'lib/drafts.js', 'lib/stats.js', 'lib/store.js'];
 const lib = LIBS.map(strip).join('\n');
 const draws = existsSync('draws/lotto645.json') ? readFileSync('draws/lotto645.json', 'utf8') : 'null';
 const preview = app.replace('__APP_VERSION__', '미리보기')
@@ -57,7 +57,10 @@ writeFileSync('sw.js', readFileSync('sw.template.js', 'utf8')
   .replace('__VERSION__', version).replace('__FILES__', JSON.stringify(APP_FILES)));
 
 // 배포 파일 점검: 루트(/) 절대경로·외부 주소 참조 금지
-const bad = [...deploy.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]).filter((u) => u.startsWith('/') || /^https?:/.test(u));
+// 바깥 주소는 사용자가 눌러서 여는 동행복권 결과 화면 링크 하나만 허용 (앱이 직접 요청하지 않음)
+const OFFICIAL = 'https://www.dhlottery.co.kr/lt645/result';
+const bad = [...deploy.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]).filter((u) => u !== OFFICIAL && (u.startsWith('/') || /^https?:/.test(u)));
+if ([...deploy.matchAll(/src="https?:/g)].length || /fetch\(\s*['"`]https?:/.test(deploy)) { console.error('바깥 주소 요청 금지'); process.exit(1); }
 const imports = [...deploy.matchAll(/from '([^']+)'/g)].map((m) => m[1]).filter((u) => !u.startsWith('./'));
 if (bad.length || imports.length) { console.error('경로 오류:', bad, imports); process.exit(1); }
 console.log('app', APP_VERSION, '/ sw.js version', version, '/ 경로 점검 통과');

@@ -38,3 +38,29 @@ test('추첨일 계산: 알려진 회차와 일치', () => {
   for (const [r, k] of Object.entries(KNOWN)) assert.equal(saturdayOf(Number(r)), k.date, `${r}회`);
   assert.equal(saturdayOf(1249), '2026-11-07');
 });
+
+import { readFileSync } from 'node:fs';
+const FULL = readFileSync(new URL('./fixtures-paste-1248.txt', import.meta.url), 'utf8');
+test('결과 화면 전체 복사 (2026-11-04 김동건 실제 복사본): 1247·1248회 번호, 1248회 당첨금', () => {
+  const r = parsePasted(FULL);
+  assert.equal(r.current, 1248);
+  assert.equal(r.items.length, 2);
+  const [a, b] = r.items;
+  assert.deepEqual([a.round, a.date, a.numbers, a.bonus], [1247, '2026-10-24', [8, 14, 21, 22, 42, 45], 24]);
+  assert.deepEqual([b.round, b.date, b.numbers, b.bonus], [1248, '2026-10-31', [16, 18, 27, 36, 38, 42], 22]);
+  assert.equal(a.ranks, undefined, '숨은 옆 회차에는 당첨금 표를 붙이지 않음');
+  assert.deepEqual(b.ranks, [
+    { rank: 1, winners: 15, amount: 1933658450 }, { rank: 2, winners: 91, amount: 53122485 },
+    { rank: 3, winners: 3265, amount: 1480597 }, { rank: 4, winners: 167745, amount: 50000 }, { rank: 5, winners: 2723467, amount: 5000 },
+  ]);
+});
+test('표 안의 "5개번호 일치 + 보너스번호 일치"가 번호 읽기에 섞이지 않음', () => {
+  const r = parsePasted(FULL);
+  assert.equal(r.items[1].bonus, 22);
+  assert.equal(r.items[1].note, '');
+});
+test('표 없이 블록만 복사해도 번호는 읽음', () => {
+  const r = parsePasted(FULL.split('순위')[0]);
+  assert.equal(r.items.length, 2);
+  assert.equal(r.items[1].ranks, undefined);
+});
