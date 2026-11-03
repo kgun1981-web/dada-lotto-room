@@ -270,7 +270,7 @@
     </div>
   </section>
 
-  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0753</span></footer>
+  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0759</span></footer>
 </div>
 
 <script type="module">
@@ -641,7 +641,8 @@ function useQrText(text) {
       (dup ? '<br><b>이미 같은 복권이 저장돼 있어요.</b> 또 저장하면 두 장으로 기록돼요.' : '') +
       (QR_FORMAT_CONFIRMED ? '' : '<br>QR 형식은 아직 실제 복권으로 확인 중이에요. 번호가 복권과 다르면 저장하지 말고 알려 주세요.'), false);
   } catch (e) {
-    qrMessage(`${esc(e instanceof InputError ? e.message : 'QR을 읽지 못했어요')}. 입력칸은 바꾸지 않았어요.<br><span class="note">읽은 QR 글자:</span> <span class="qr-raw">${esc(String(text).slice(0, 300))}</span>`, true);
+    // 읽은 글자는 접어 두고 사용자가 펼칠 때만 보임 (저장·전송·복사하지 않음)
+    qrMessage(`${esc(e instanceof InputError ? e.message : 'QR을 읽지 못했어요')}. 입력칸은 바꾸지 않았어요.<details><summary class="note">읽은 QR 글자 보기</summary><span class="qr-raw">${esc(String(text).slice(0, 300))}</span></details>`, true);
   }
 }
 $('qrStart').addEventListener('click', async () => {

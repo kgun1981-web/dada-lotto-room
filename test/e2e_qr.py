@@ -26,7 +26,9 @@ with sync_playwright() as p:
     page.fill('#round', '1248')
     page.set_input_files('#qrFile', os.path.join(IMG, 'other.png')); page.wait_for_timeout(800)
     check('다른 QR은 거부, 입력칸 그대로', '동행복권 로또 QR이 아니에요' in page.inner_text('#qrMsg') and page.input_value('#round') == '1248', page.inner_text('#qrMsg')[:80])
-    check('읽은 QR 글자를 보여 줌', 'example.com' in page.inner_text('#qrMsg'))
+    check('읽은 QR 글자는 접혀 있음', not page.locator('#qrMsg .qr-raw').is_visible())
+    page.tap('#qrMsg summary')
+    check('누르면 읽은 QR 글자 보임', page.locator('#qrMsg .qr-raw').is_visible() and 'example.com' in page.inner_text('#qrMsg'))
 
     page.set_input_files('#qrFile', os.path.join(IMG, 'none.png')); page.wait_for_timeout(800)
     check('QR 없는 사진 안내', 'QR을 찾지 못했어요' in page.inner_text('#qrMsg'))
