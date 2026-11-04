@@ -41,9 +41,10 @@ with sync_playwright() as p:
     check('상단 상태줄 표시', '판정 가능' in page.inner_text('#status'), page.inner_text('#status'))
     check('번호 10게임 표시', page.locator('#games li').count() == 10)
     games = [li.inner_text().split() for li in page.locator('#games li').all()]
-    ok = all(len(g) == 7 and len(set(g[1:])) == 6 and all(1 <= int(n) <= 45 for n in g[1:]) for g in games)
+    ok = all(len(g) == 8 and len(set(g[1:7])) == 6 and all(1 <= int(n) <= 45 for n in g[1:7]) for g in games)
     check('각 게임 1~45 중복 없는 6개', ok)
-    check('10게임 서로 다름', len({' '.join(g[1:]) for g in games}) == 10)
+    check('10게임 서로 다름', len({' '.join(g[1:7]) for g in games}) == 10)
+    check('A~E 통계, F~J 무작위 표시', [g[7] for g in games] == ['통계'] * 5 + ['무작위'] * 5, str([g[7] for g in games]))
     w = page.evaluate('[document.documentElement.scrollWidth, window.innerWidth]')
     check('가로 스크롤 없음(아이폰 폭)', w[0] <= w[1], f'{w[0]} <= {w[1]}')
     page.tap('#tab-my')
@@ -69,16 +70,15 @@ with sync_playwright() as p:
     page.tap('#tab-gen')
 
     # 4. 패턴 회피 토글
-    page.tap('#mode-rand')
-    check('무작위 모드 전환', page.is_visible('#randBox') and not page.is_visible('#statBox'))
+    check('통계·무작위 설정 함께 보임', page.is_visible('#randBox') and page.is_visible('#statBox'))
     page.tap('#filter')
     check('패턴 회피 끄기 → 재생성', '필터 꺼짐' in page.inner_text('#stat'))
     page.tap('#filter')
     check('패턴 회피 켜기', '필터 제외' in page.inner_text('#stat'))
 
     # 5. 초안 2장 흐름
-    first5 = [li.inner_text().split()[1:] for li in page.locator('#games li').all()][:5]
-    last5 = [li.inner_text().split()[1:] for li in page.locator('#games li').all()][5:]
+    first5 = [li.inner_text().split()[1:7] for li in page.locator('#games li').all()][:5]
+    last5 = [li.inner_text().split()[1:7] for li in page.locator('#games li').all()][5:]
     page.tap('#toMy')
     check('초안 1장(A~E) 채워짐', read_rows(page) == first5, str(read_rows(page))[:80])
     check('초안 안내 문구 표시', page.is_visible('#draftNote'))

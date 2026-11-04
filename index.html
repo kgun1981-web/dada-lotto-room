@@ -100,6 +100,8 @@
   ol.games { list-style: none; margin: 0; padding: 0; }
   ol.games li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
   ol.games li:first-child { border-top: 0; }
+  ol.games li.grp-start { border-top: 2px solid var(--line); margin-top: 6px; }
+  .kind { font-size: 11.5px; color: var(--muted); white-space: nowrap; margin-left: auto; }
   .tag { width: 20px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
   .balls { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; min-width: 0; }
   .ball { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13.5px;
@@ -141,27 +143,24 @@
 
   <!-- 번호 생성 -->
   <section class="panel" id="p-gen">
-    <div class="seg" role="group" aria-label="추천 방식">
-      <button type="button" id="mode-stat" aria-pressed="true">통계 추천</button>
-      <button type="button" id="mode-rand" aria-pressed="false">무작위</button>
-    </div>
     <div class="box" id="statBox">
-      <h2 id="statTitle">통계 추천</h2>
-      <p class="note">과거 당첨번호를 분석해 만든 통계 기반 추천입니다. 모든 번호 조합의 당첨 확률은 같으며, 이 추천이 당첨 가능성을 높인다는 근거는 없습니다. 과거 회차에서 시험한 결과와 무작위 추천 비교를 함께 보여드립니다.</p>
+      <h2 id="statTitle">이번 주 추천 10게임</h2>
+      <p class="note">A~E는 통계 추천 5게임, F~J는 무작위 5게임이에요. 한 장에 5게임이라 통계 1장, 무작위 1장으로 사면 1만 원이에요. 모든 번호 조합의 당첨 확률은 같으며, 통계 추천이 당첨 가능성을 높인다는 근거는 없습니다(아래 과거 검증 참고).</p>
       <p class="note" id="statRule"></p>
     </div>
-    <div class="box" id="randBox" hidden>
+    <div class="box">
+      <ol class="games" id="games" aria-live="polite"></ol>
+      <div class="row"><span class="note" id="stat"></span><button class="btn small" id="toMy" type="button">입력 초안 만들기 (2장)</button></div>
+    </div>
+    <div class="box" id="randBox">
+      <h2>무작위 5게임 (F~J) 설정</h2>
       <div class="row toggle">
         <label for="filter"><b>패턴 회피 (실험)</b></label>
         <input type="checkbox" id="filter" checked>
       </div>
       <p class="note">모든 유효한 로또 번호 조합의 1등 당첨 확률은 같습니다. '패턴 회피'는 일부 번호 모양을 제외해 조합을 만드는 실험적 옵션입니다. 공동 당첨자가 줄어든다는 보장은 없으며, 당첨 확률을 높여 주지도 않습니다.</p>
       <p class="note" id="rules"></p>
-      <button class="btn primary" id="go" type="button">번호 새로 뽑기</button>
-    </div>
-    <div class="box">
-      <ol class="games" id="games" aria-live="polite"></ol>
-      <div class="row"><span class="note" id="stat"></span><button class="btn small" id="toMy" type="button">입력 초안 만들기 (2장)</button></div>
+      <button class="btn primary" id="go" type="button">무작위 5게임만 새로 뽑기</button>
     </div>
     <div class="box" id="btBox">
       <h2>과거 검증</h2>
@@ -270,7 +269,7 @@
     </div>
   </section>
 
-  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-0759</span></footer>
+  <footer>10게임 1등 확률은 10 / 8,145,060이며, 어떤 방법으로 뽑아도 같습니다. 판정 결과는 참고용이며 최종 당첨 여부는 동행복권 공식 조회와 실물 복권으로 확인하세요.<br>버전 <span id="appVer">2026.11.04-1358</span></footer>
 </div>
 
 <script type="module">
@@ -393,45 +392,47 @@ function show(name) {
 for (const k in tabs) $('tab-' + k).addEventListener('click', () => show(k));
 
 // ---------- 번호 생성 ----------
-const LS_MODE = 'dada-lotto-gen-mode';
-let genMode = lsGet(LS_MODE) === 'rand' ? 'rand' : 'stat';
 let backtestData = null;
 $('rules').textContent = '제외 규칙: ' + Object.values(FILTERS).map((f) => f.label).join(', ');
 // 통계에 쓰는 자료: 1248회까지 결과 화면 자료 + 그 뒤 직접 입력한 회차 (1회부터 빠짐없이 이어질 때만)
 const officialDraws = () => [...drawIdx.values()].sort((a, b) => a.round - b.round);
+// 통계 추천 5게임(A~E) + 무작위 5게임(F~J). 한 장 5게임 × 2장 = 1만 원
+let statGames = []; let randGames = []; let statInfo = ''; let randStats = null;
+const KIND = (i) => (i < statGames.length ? '통계' : '무작위');
 const showGames = (games) => {
-  $('games').innerHTML = games.map((g, i) => `<li><span class="tag">${TAGS[i]}</span><span class="balls">${g.map((n) => ball(n)).join('')}</span></li>`).join('');
+  $('games').innerHTML = games.map((g, i) => `<li class="${i === statGames.length && i ? 'grp-start' : ''}"><span class="tag">${TAGS[i]}</span><span class="balls">${g.map((n) => ball(n)).join('')}</span><span class="kind">${KIND(i)}</span></li>`).join('');
 };
 function setGames(games) {
   lastGames = games;
   if (drafts.active || drafts.queue.length) { drafts = discardDrafts(); renderForm(); } // 새 번호가 나오면 이전 초안 폐기
   showGames(games);
 }
+/** 화면 번호 합치기. 번호가 실제로 바뀔 때만 초안을 버림 */
+function compose() {
+  const games = [...statGames, ...randGames];
+  if (games.map(String).join('|') === lastGames.map(String).join('|')) showGames(games);
+  else setGames(games);
+  const rej = randStats ? Object.values(randStats.rejected).reduce((a, b) => a + b, 0) : 0;
+  $('stat').textContent = [statInfo, randStats ? ($('filter').checked ? `무작위: 필터 제외 ${rej}회` : '무작위: 필터 꺼짐') : ''].filter(Boolean).join(' · ');
+}
+/** 무작위 5게임만 새로 뽑음 (통계 추천과 겹치는 게임은 다시 뽑음) */
 function generate() {
-  if (genMode === 'stat') { renderStats(); return; }
-  const filter = $('filter').checked;
   try {
-    const { games, stats } = generateGames({ count: 10, filter });
-    setGames(games);
-    const rej = Object.values(stats.rejected).reduce((a, b) => a + b, 0);
-    $('stat').textContent = filter ? `시도 ${stats.tries}회 · 필터 제외 ${rej}회` : `시도 ${stats.tries}회 · 필터 꺼짐`;
+    const taken = new Set(statGames.map(String));
+    let r;
+    for (let k = 0; k < 20; k++) {
+      r = generateGames({ count: 5, filter: $('filter').checked });
+      if (!r.games.some((g) => taken.has(String(g)))) break;
+    }
+    randGames = r.games; randStats = r.stats;
+    compose();
   } catch (e) {
-    lastGames = []; // 실패 시 이전 번호로 초안이 만들어지지 않도록 비움
-    drafts = discardDrafts(); renderForm();
+    randGames = []; randStats = null;
+    lastGames = []; drafts = discardDrafts(); renderForm();
     $('games').innerHTML = `<li class="err">${esc(e.message)}. 다시 눌러 주세요.</li>`;
     $('stat').textContent = '';
   }
 }
-function setMode(m) {
-  genMode = m; lsSet(LS_MODE, m);
-  $('mode-stat').setAttribute('aria-pressed', String(m === 'stat'));
-  $('mode-rand').setAttribute('aria-pressed', String(m === 'rand'));
-  $('statBox').hidden = m !== 'stat';
-  $('randBox').hidden = m !== 'rand';
-  generate();
-}
-$('mode-stat').addEventListener('click', () => setMode('stat'));
-$('mode-rand').addEventListener('click', () => setMode('rand'));
 $('go').addEventListener('click', generate);
 $('filter').addEventListener('change', generate);
 
@@ -441,23 +442,23 @@ function renderStats() {
   const ds = officialDraws();
   const ok = ds.length >= STRATEGY.window && ds.every((d, i) => d.round === i + 1);
   if (!ok) {
-    if (genMode === 'stat') {
-      $('statTitle').textContent = '통계 추천';
-      $('statRule').textContent = '통계 추천은 1회부터 최신 회차까지 당첨번호가 빠짐없이 있어야 만들 수 있어요. 빠진 회차를 당첨번호 탭에서 입력하거나 무작위 탭을 이용해 주세요.';
-      lastGames = []; $('games').innerHTML = ''; $('stat').textContent = '';
-    }
+    $('statTitle').textContent = '이번 주 추천';
+    $('statRule').textContent = '통계 추천은 1회부터 최신 회차까지 당첨번호가 빠짐없이 있어야 만들 수 있어요. 빠진 회차를 당첨번호 탭에서 입력해 주세요. 지금은 무작위 5게임만 보여 드려요.';
+    statGames = []; statInfo = '';
+    if (randGames.length) compose();
     $('numBody').innerHTML = '<p class="note">당첨번호가 빠진 회차가 있어 통계를 낼 수 없어요.</p>';
     return;
   }
   const t = ds.length + 1;
   const key = `${t}`;
-  if (genMode === 'stat') {
-    $('statTitle').textContent = `${t}회용 통계 추천 10게임`;
-    $('statRule').textContent = `규칙: 1~${t - 1}회 자료만 사용. 최근 ${STRATEGY.window}회차(${t - STRATEGY.window}~${t - 1}회)에 자주 나온 번호일수록 더 잘 뽑히게 했어요(가중치 = 1 + 나온 횟수). 같은 회차에는 항상 같은 번호가 나와요.`;
-    if (statKey !== key || !lastGames.length) setGames(recommend(ds, t));
-    else showGames(lastGames);
+  {
+    $('statTitle').textContent = `${t}회용 추천 10게임 (통계 5 + 무작위 5)`;
+    $('statRule').textContent = `통계 추천 규칙: 1~${t - 1}회 자료만 사용. 최근 ${STRATEGY.window}회차(${t - STRATEGY.window}~${t - 1}회)에 자주 나온 번호일수록 더 잘 뽑히게 했어요(가중치 = 1 + 나온 횟수). 같은 회차에는 항상 같은 번호가 나와요.`;
+    // 같은 규칙으로 만든 10게임 중 앞 5게임 (과거 검증은 10게임 기준)
+    statGames = recommend(ds, t).slice(0, 5);
     const userN = ds.filter(isUserDraw).length;
-    $('stat').textContent = `${STRATEGY.name} · ${t - 1}회까지 반영${userN ? ` (직접 입력 ${userN}회차 포함)` : ''}`;
+    statInfo = `${STRATEGY.name} · ${t - 1}회까지 반영${userN ? ` (직접 입력 ${userN}회차 포함)` : ''}`;
+    if (randGames.length) compose();
   }
   if (statKey === key && $('numBody').childElementCount) return;
   statKey = key;
@@ -521,7 +522,7 @@ function renderBacktest() {
   const where = `무작위 ${d.seeds}번 중 ${h.random.below}번보다 많고 ${d.seeds - h.random.below - h.random.equal}번보다 적어요`;
   const post = backtestData.afterRegistration;
   $('btBody').innerHTML = `
-    <p class="note">${d.from}~${d.to}회(${d.rounds}회차)에 매주 10게임(1만원)씩 샀다고 가정하고, 그 회차 직전까지의 자료로만 만든 추천을 실제 결과와 맞춰 봤어요. 무작위는 같은 조건으로 ${d.seeds}번 반복했어요. 규칙과 구간은 결과를 보기 전에 정했어요.</p>
+    <p class="note">${d.from}~${d.to}회(${d.rounds}회차)에 매주 10게임(1만원)씩 샀다고 가정하고, 그 회차 직전까지의 자료로만 만든 추천을 실제 결과와 맞춰 봤어요. 무작위는 같은 조건으로 ${d.seeds}번 반복했어요. 규칙과 구간은 결과를 보기 전에 정했어요. 이 검증은 통계 추천 10게임 기준이에요. 지금 화면의 통계 5게임은 같은 규칙으로 만든 10게임 중 앞 5게임이고, '통계 5 + 무작위 5' 조합은 따로 검증하지 않았어요.</p>
     <div style="overflow-x:auto"><table class="bt">
       <thead><tr><th></th><th>통계 추천</th><th>무작위 평균<br>(최소~최대)</th></tr></thead>
       <tbody>
@@ -1049,8 +1050,8 @@ $('wipeYes').addEventListener('click', async () => {
 });
 
 // ---------- 시작 ----------
-setMode(genMode);
-await loadDraws();
+await loadDraws(); // 통계 추천 5게임 먼저
+generate();          // 그다음 무작위 5게임 (통계 추천과 겹치지 않게)
 loadBacktest();
 clearForm();
 renderForm();
